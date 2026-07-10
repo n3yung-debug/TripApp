@@ -46,7 +46,14 @@ window.TRIPAPP_CONFIG = {
   //   messagingSenderId: "1234567890",
   //   appId: "1:1234:web:abcd"
   // },
-  FIREBASE_CONFIG: null,
+  FIREBASE_CONFIG: {
+    apiKey: "AIzaSyAOzQJI2OQaBzvulbG4o4eUJtuwOY19DdM",
+    authDomain: "barbados-trip-7b4c0.firebaseapp.com",
+    projectId: "barbados-trip-7b4c0",
+    storageBucket: "barbados-trip-7b4c0.firebasestorage.app",
+    messagingSenderId: "937469551657",
+    appId: "1:937469551657:web:0045b170f350917307e838"
+  },
 
   // ---- Shared secret so it's just the two of you --------------------------
   COUPLE_CODE: "nick-and-kelli-barbados",
