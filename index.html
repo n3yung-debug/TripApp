@@ -50,29 +50,14 @@
     <section class="tab-panel" data-panel="planner" hidden>
       <div class="panel-head">
         <h2>Trip Planner</h2>
-        <p class="panel-sub">Excursions, dinners &amp; plans — tag each to a day.</p>
+        <p class="panel-sub">Tap a day to see &amp; add plans.</p>
       </div>
 
-      <div id="cal-strip" class="cal-strip"></div>
-
-      <form id="plan-form" class="add-form">
-        <input id="plan-title" type="text" placeholder="e.g. Catamaran &amp; turtle snorkel" maxlength="120" required />
-        <div class="add-form-row">
-          <select id="plan-type" aria-label="Type">
-            <option value="excursion">🤿 Excursion</option>
-            <option value="dining">🍽️ Dining</option>
-            <option value="activity">🏖️ Activity</option>
-            <option value="idea">💡 Idea / wishlist</option>
-          </select>
-          <select id="plan-day" aria-label="Day">
-            <option value="">Someday</option>
-          </select>
-          <button type="submit" class="btn-add">Add</button>
-        </div>
-      </form>
-
       <div class="filter-row" id="plan-filters"></div>
-      <div id="plan-list" class="card-list"></div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <button id="someday-btn" class="someday-btn" type="button">
+        <span>💡 Someday / wishlist</span><span id="someday-count" class="tag"></span>
+      </button>
     </section>
 
     <!-- ================= PACKING ================= -->
@@ -196,6 +181,32 @@
 
       <p class="app-version" id="app-version"></p>
     </section>
+  </div>
+
+  <!-- ================= DAY SHEET (planner day detail) ================= -->
+  <div id="day-sheet" class="day-sheet" hidden>
+    <div class="day-sheet-backdrop"></div>
+    <div class="day-sheet-panel">
+      <div class="day-sheet-head">
+        <button id="day-sheet-close" class="sheet-close" type="button" aria-label="Close">✕</button>
+        <h3 id="day-sheet-title">Day</h3>
+        <button id="day-sheet-add-btn" class="sheet-add" type="button" aria-label="Add event">＋</button>
+      </div>
+      <form id="day-add-form" class="add-form" hidden>
+        <input id="day-add-title" type="text" placeholder="e.g. Catamaran &amp; turtle snorkel" maxlength="120" required />
+        <div class="add-form-row">
+          <input id="day-add-time" type="time" aria-label="Time (optional)" />
+          <select id="day-add-type" aria-label="Type">
+            <option value="excursion">🤿 Excursion</option>
+            <option value="dining">🍽️ Dining</option>
+            <option value="activity">🏖️ Activity</option>
+            <option value="idea">💡 Idea</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-add btn-add-block">Add to this day</button>
+      </form>
+      <div id="day-sheet-list" class="card-list"></div>
+    </div>
   </div>
 
   <!-- ================= TAB BAR ================= -->

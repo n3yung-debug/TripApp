@@ -160,52 +160,31 @@
     excursion: ["🤿", "Excursion"], dining: ["🍽️", "Dining"],
     activity: ["🏖️", "Activity"], idea: ["💡", "Idea"],
   };
+  const TILE_PREVIEW_MAX = 3;
   let planFilter = "all";
-  let planDayFilter = "all";
-  function initCalStrip() {
-    const strip = $("#cal-strip");
-    strip.innerHTML = "";
-    const allBtn = document.createElement("button");
-    allBtn.className = "cal-day active"; allBtn.dataset.day = "all";
-    allBtn.innerHTML = `<span class="cal-dow">All</span><span class="cal-num">🗺️</span><span class="cal-mon">Days</span>`;
-    strip.appendChild(allBtn);
-    (TRIP.days || []).forEach((iso) => {
-      const d = new Date(iso + "T12:00:00");
-      const b = document.createElement("button");
-      b.className = "cal-day"; b.dataset.day = iso;
-      b.innerHTML = `
-        <span class="cal-dow">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
-        <span class="cal-num">${d.getDate()}</span>
-        <span class="cal-mon">${d.toLocaleDateString(undefined, { month: "short" })}</span>
-        <span class="cal-count" data-count-for="${iso}"></span>`;
-      strip.appendChild(b);
-    });
-    strip.addEventListener("click", (e) => {
-      const btn = e.target.closest(".cal-day");
-      if (!btn) return;
-      planDayFilter = btn.dataset.day;
-      $$(".cal-day", strip).forEach((c) => c.classList.toggle("active", c === btn));
-      renderPlans(currentPlans);
-    });
+  let currentPlans = [];
+  let openDay = null; // iso string, "" for someday, or null when sheet is closed
+
+  function fmtTime(t) {
+    if (!t) return "";
+    const [h, m] = t.split(":").map(Number);
+    const d = new Date(2000, 0, 1, h, m);
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
-  function updateCalCounts(rows) {
-    const counts = {};
-    rows.forEach((r) => { if (r.day) counts[r.day] = (counts[r.day] || 0) + 1; });
-    $$("#cal-strip .cal-count").forEach((el) => {
-      const day = el.dataset.countFor;
-      el.textContent = counts[day] ? counts[day] : "";
-    });
+  function sortByTime(a, b) {
+    if (a.done !== b.done) return a.done - b.done;
+    const ta = a.time || "99:99", tb = b.time || "99:99";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return a.createdAt - b.createdAt;
   }
+  function itemsFor(day) {
+    let rows = currentPlans.filter((r) => (r.day || "") === day);
+    if (planFilter !== "all") rows = rows.filter((r) => r.type === planFilter);
+    return rows.sort(sortByTime);
+  }
+
   function initPlanner() {
-    initCalStrip();
-    // populate day dropdown
-    const daySel = $("#plan-day");
-    (TRIP.days || []).forEach((iso) => {
-      const o = document.createElement("option");
-      o.value = iso; o.textContent = dayLabel(iso);
-      daySel.appendChild(o);
-    });
-    // filters
+    // type filter chips
     const filters = [["all", "All"], ["excursion", "🤿"], ["dining", "🍽️"], ["activity", "🏖️"], ["idea", "💡"]];
     const fr = $("#plan-filters");
     filters.forEach(([val, label]) => {
@@ -215,55 +194,101 @@
       b.addEventListener("click", () => {
         planFilter = val;
         $$(".chip", fr).forEach((c) => c.classList.toggle("active", c.dataset.f === val));
-        renderPlans(currentPlans);
+        renderCalGrid();
+        if (openDay !== null) renderDaySheetList();
       });
       fr.appendChild(b);
     });
 
-    $("#plan-form").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const title = $("#plan-title").value.trim();
-      if (!title) return;
-      Store.add("plans", { title, type: $("#plan-type").value, day: $("#plan-day").value || "", done: false });
-      $("#plan-title").value = "";
+    // calendar squares — one per trip day
+    const grid = $("#cal-grid");
+    (TRIP.days || []).forEach((iso) => {
+      const d = new Date(iso + "T12:00:00");
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "cal-tile"; tile.dataset.day = iso;
+      tile.innerHTML = `
+        <span class="cal-tile-dow">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+        <span class="cal-tile-num">${d.getDate()}</span>
+        <span class="cal-tile-mon">${d.toLocaleDateString(undefined, { month: "short" })}</span>
+        <div class="cal-tile-events" data-events-for="${iso}"></div>`;
+      tile.addEventListener("click", () => openDaySheet(iso));
+      grid.appendChild(tile);
     });
 
-    Store.subscribe("plans", (rows) => { currentPlans = rows; renderPlans(rows); });
-  }
-  let currentPlans = [];
-  function renderPlans(rows) {
-    updateCalCounts(rows);
-    const list = $("#plan-list");
-    list.innerHTML = "";
-    let filtered = rows.slice();
-    if (planFilter !== "all") filtered = filtered.filter((r) => r.type === planFilter);
-    if (planDayFilter !== "all") filtered = filtered.filter((r) => r.day === planDayFilter);
-    if (!filtered.length) { list.appendChild(emptyMsg("Nothing yet — add your first plan above! 🗺️")); return; }
+    $("#someday-btn").addEventListener("click", () => openDaySheet(""));
 
-    // group by day, "Someday" last (skip grouping headers when a single day is already selected)
-    const groups = {};
-    filtered.forEach((r) => { (groups[r.day || ""] = groups[r.day || ""] || []).push(r); });
-    const dayKeys = (TRIP.days || []).filter((d) => groups[d]);
-    if (groups[""]) dayKeys.push("");
-    const showHeadings = planDayFilter === "all";
-
-    dayKeys.forEach((day) => {
-      if (showHeadings) {
-        const h = document.createElement("div");
-        h.className = "day-heading";
-        h.textContent = day ? dayLabel(day) : "💡 Someday / wishlist";
-        list.appendChild(h);
-      }
-      groups[day].sort((a, b) => (a.done - b.done) || (a.createdAt - b.createdAt));
-      groups[day].forEach((r) => {
-        const [emoji, tname] = TYPE_META[r.type] || ["•", r.type];
-        const meta = `<span class="tag">${emoji} ${tname}</span>`;
-        list.appendChild(checkRow({
-          title: r.title, done: r.done, meta,
-          onToggle: () => Store.update("plans", r.id, { done: !r.done }),
-          onDelete: () => Store.remove("plans", r.id),
-        }));
+    // day sheet controls
+    $("#day-sheet-close").addEventListener("click", closeDaySheet);
+    $("#day-sheet").querySelector(".day-sheet-backdrop").addEventListener("click", closeDaySheet);
+    $("#day-sheet-add-btn").addEventListener("click", () => {
+      const form = $("#day-add-form");
+      form.hidden = !form.hidden;
+      if (!form.hidden) $("#day-add-title").focus();
+    });
+    $("#day-add-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const title = $("#day-add-title").value.trim();
+      if (!title || openDay === null) return;
+      Store.add("plans", {
+        title, type: $("#day-add-type").value, time: $("#day-add-time").value || "",
+        day: openDay, done: false,
       });
+      $("#day-add-title").value = "";
+      $("#day-add-time").value = "";
+    });
+
+    Store.subscribe("plans", (rows) => {
+      currentPlans = rows;
+      renderCalGrid();
+      if (openDay !== null) renderDaySheetList();
+    });
+  }
+
+  function renderCalGrid() {
+    (TRIP.days || []).forEach((iso) => {
+      const rows = itemsFor(iso);
+      const box = $(`.cal-tile-events[data-events-for="${iso}"]`);
+      if (!box) return;
+      if (!rows.length) { box.innerHTML = `<span class="cal-tile-empty">Tap to add</span>`; return; }
+      const shown = rows.slice(0, TILE_PREVIEW_MAX);
+      const rest = rows.length - shown.length;
+      box.innerHTML = shown.map((r) => {
+        const [emoji] = TYPE_META[r.type] || ["•"];
+        const t = r.time ? fmtTime(r.time) + " · " : "";
+        return `<span class="cal-tile-event">${emoji} ${t}${esc(r.title)}</span>`;
+      }).join("") + (rest > 0 ? `<span class="cal-tile-more">+${rest} more</span>` : "");
+    });
+    const somedayCount = itemsFor("").length;
+    $("#someday-count").textContent = somedayCount ? somedayCount : "";
+  }
+
+  function openDaySheet(day) {
+    openDay = day;
+    $("#day-sheet-title").textContent = day ? dayLabel(day) : "💡 Someday / wishlist";
+    $("#day-add-form").hidden = true;
+    $("#day-add-title").value = "";
+    $("#day-add-time").value = "";
+    renderDaySheetList();
+    $("#day-sheet").hidden = false;
+  }
+  function closeDaySheet() {
+    $("#day-sheet").hidden = true;
+    openDay = null;
+  }
+  function renderDaySheetList() {
+    const list = $("#day-sheet-list");
+    list.innerHTML = "";
+    const rows = itemsFor(openDay);
+    if (!rows.length) { list.appendChild(emptyMsg("Nothing yet — tap ＋ to add the first plan 🗺️")); return; }
+    rows.forEach((r) => {
+      const [emoji, tname] = TYPE_META[r.type] || ["•", r.type];
+      const meta = (r.time ? `<span class="tag">🕐 ${fmtTime(r.time)}</span>` : "") + `<span class="tag">${emoji} ${tname}</span>`;
+      list.appendChild(checkRow({
+        title: r.title, done: r.done, meta,
+        onToggle: () => Store.update("plans", r.id, { done: !r.done }),
+        onDelete: () => Store.remove("plans", r.id),
+      }));
     });
   }
 
