@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>Nick &amp; Kelli — Barbados</title>
+  <meta name="theme-color" content="#0b3d47" />
+
+  <!-- PWA / iOS home-screen -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Barbados" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
+  <link rel="icon" href="assets/icons/favicon.png" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Background photo layer (set in Settings, syncs across devices) -->
+  <div id="bg-layer"></div>
+  <div id="bg-scrim"></div>
+
+  <div id="app">
+    <!-- ================= COUNTDOWN ================= -->
+    <section class="tab-panel" data-panel="countdown">
+      <header class="hero">
+        <p class="hero-eyebrow" id="hero-names">Nick &amp; Kelli</p>
+        <h1 class="hero-title">Sandals Barbados 🌴</h1>
+        <p class="hero-sub" id="hero-dates"></p>
+
+        <div id="countdown" class="countdown">
+          <div class="cd-cell"><span class="cd-num" id="cd-days">–</span><span class="cd-label">days</span></div>
+          <div class="cd-cell"><span class="cd-num" id="cd-hours">–</span><span class="cd-label">hrs</span></div>
+          <div class="cd-cell"><span class="cd-num" id="cd-mins">–</span><span class="cd-label">min</span></div>
+          <div class="cd-cell"><span class="cd-num" id="cd-secs">–</span><span class="cd-label">sec</span></div>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+          <p class="progress-text" id="progress-text"></p>
+        </div>
+
+        <p class="milestone" id="milestone"></p>
+      </header>
+    </section>
+
+    <!-- ================= TRIP PLANNER ================= -->
+    <section class="tab-panel" data-panel="planner" hidden>
+      <div class="panel-head">
+        <h2>Trip Planner</h2>
+        <p class="panel-sub">Excursions, dinners &amp; plans — tag each to a day.</p>
+      </div>
+
+      <form id="plan-form" class="add-form">
+        <input id="plan-title" type="text" placeholder="e.g. Catamaran &amp; turtle snorkel" maxlength="120" required />
+        <div class="add-form-row">
+          <select id="plan-type" aria-label="Type">
+            <option value="excursion">🤿 Excursion</option>
+            <option value="dining">🍽️ Dining</option>
+            <option value="activity">🏖️ Activity</option>
+            <option value="idea">💡 Idea / wishlist</option>
+          </select>
+          <select id="plan-day" aria-label="Day">
+            <option value="">Someday</option>
+          </select>
+          <button type="submit" class="btn-add">Add</button>
+        </div>
+      </form>
+
+      <div class="filter-row" id="plan-filters"></div>
+      <div id="plan-list" class="card-list"></div>
+    </section>
+
+    <!-- ================= PACKING ================= -->
+    <section class="tab-panel" data-panel="packing" hidden>
+      <div class="panel-head">
+        <h2>Packing List</h2>
+        <p class="panel-sub"><span id="pack-count"></span></p>
+      </div>
+      <form id="pack-form" class="add-form">
+        <input id="pack-title" type="text" placeholder="Add an item…" maxlength="80" required />
+        <div class="add-form-row">
+          <select id="pack-cat" aria-label="Category">
+            <option>Beach</option><option>Clothes</option><option>Toiletries</option>
+            <option>Documents</option><option>Tech</option><option>Kelli</option>
+            <option>Nick</option><option>Other</option>
+          </select>
+          <button type="submit" class="btn-add">Add</button>
+        </div>
+      </form>
+      <div id="pack-list" class="card-list"></div>
+      <button id="pack-seed" class="btn-ghost">✨ Add suggested resort essentials</button>
+    </section>
+
+    <!-- ================= LOVE NOTES ================= -->
+    <section class="tab-panel" data-panel="notes" hidden>
+      <div class="panel-head">
+        <h2>Love Notes 💌</h2>
+        <p class="panel-sub">Little notes &amp; why we're excited.</p>
+      </div>
+      <form id="note-form" class="add-form">
+        <textarea id="note-text" placeholder="Write something sweet…" maxlength="500" rows="2" required></textarea>
+        <div class="add-form-row">
+          <select id="note-author" aria-label="From">
+            <option value="Nick">From Nick</option>
+            <option value="Kelli">From Kelli</option>
+          </select>
+          <button type="submit" class="btn-add">Post</button>
+        </div>
+      </form>
+      <div id="note-list" class="feed-list"></div>
+    </section>
+
+    <!-- ================= MEMORIES / PHOTOS ================= -->
+    <section class="tab-panel" data-panel="photos" hidden>
+      <div class="panel-head">
+        <h2>Memories 📸</h2>
+        <p class="panel-sub">Photos leading up to &amp; during the trip.</p>
+      </div>
+      <label class="photo-upload" for="photo-input">
+        <span>＋ Add photo</span>
+        <input id="photo-input" type="file" accept="image/*" hidden />
+      </label>
+      <div id="photo-grid" class="photo-grid"></div>
+    </section>
+
+    <!-- ================= BARBADOS INFO ================= -->
+    <section class="tab-panel" data-panel="info" hidden>
+      <div class="panel-head">
+        <h2>Barbados ☀️</h2>
+        <p class="panel-sub" id="info-loc"></p>
+      </div>
+      <div id="weather-card" class="info-card weather-card">Loading weather…</div>
+      <div id="sun-card" class="info-card"></div>
+      <div class="info-card">
+        <h3>💵 Money</h3>
+        <p>Currency: <b>Barbadian dollar (BBD)</b>, pegged at <b>2 BBD = 1 USD</b>. USD is widely accepted; you'll often get change in BBD. Tipping ~10–15% (check if already added).</p>
+      </div>
+      <div class="info-card">
+        <h3>🗣️ Good to know</h3>
+        <ul>
+          <li>Language: English (Bajan dialect).</li>
+          <li>Drives on the <b>left</b>.</li>
+          <li>Plugs: type A/B, 115V — same as the US.</li>
+          <li>Water is safe to drink.</li>
+          <li>"Wuh gine on?" = "What's going on?" / hello.</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3>🏝️ Don't-miss</h3>
+        <ul>
+          <li>Swim with sea turtles on a catamaran cruise.</li>
+          <li>Oistins Fish Fry (Friday nights).</li>
+          <li>Harrison's Cave &amp; the east-coast surf at Bathsheba.</li>
+          <li>Sunset at the beach — see the exact time above.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section class="tab-panel" data-panel="settings" hidden>
+      <div class="panel-head"><h2>Settings</h2></div>
+
+      <div class="info-card">
+        <h3>☁️ Sync</h3>
+        <p id="sync-status" class="sync-status">Checking…</p>
+        <label class="field">
+          <span>Couple code (both phones must match)</span>
+          <input id="couple-code-input" type="text" placeholder="our-secret-code" />
+        </label>
+        <button id="save-code" class="btn-add">Save couple code</button>
+      </div>
+
+      <div class="info-card">
+        <h3>🖼️ Home background</h3>
+        <p class="panel-sub">Use your photo of the two of you.</p>
+        <label class="photo-upload" for="bg-input"><span>Choose background photo</span>
+          <input id="bg-input" type="file" accept="image/*" hidden /></label>
+        <button id="bg-clear" class="btn-ghost">Remove background</button>
+      </div>
+
+      <div class="info-card">
+        <h3>📲 Install on your iPhone</h3>
+        <ol>
+          <li>Open this page in <b>Safari</b>.</li>
+          <li>Tap the <b>Share</b> icon (box with ↑).</li>
+          <li>Scroll and tap <b>“Add to Home Screen.”</b></li>
+          <li>Tap <b>Add</b> — the app icon appears on your home screen. 🌴</li>
+        </ol>
+      </div>
+
+      <p class="app-version" id="app-version"></p>
+    </section>
+  </div>
+
+  <!-- ================= TAB BAR ================= -->
+  <nav id="tabbar" class="tabbar">
+    <button class="tab" data-tab="countdown" aria-label="Countdown">⏳<span>Home</span></button>
+    <button class="tab" data-tab="planner" aria-label="Planner">🗺️<span>Plan</span></button>
+    <button class="tab" data-tab="packing" aria-label="Packing">🧳<span>Pack</span></button>
+    <button class="tab" data-tab="notes" aria-label="Notes">💌<span>Notes</span></button>
+    <button class="tab" data-tab="photos" aria-label="Photos">📸<span>Photos</span></button>
+    <button class="tab" data-tab="info" aria-label="Info">☀️<span>Info</span></button>
+    <button class="tab" data-tab="settings" aria-label="Settings">⚙️<span>You</span></button>
+  </nav>
+
+  <!-- Confetti canvas for milestones -->
+  <canvas id="confetti"></canvas>
+
+  <!-- Firebase (compat SDK, loaded from CDN; app still runs offline/local without it) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+
+  <script src="config.js"></script>
+  <script src="store.js"></script>
+  <script src="weather.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
