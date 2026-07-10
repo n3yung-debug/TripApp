@@ -27,7 +27,10 @@
       + `&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m`
       + `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max`
       + `&temperature_unit=fahrenheit&wind_speed_unit=mph`
-      + `&timezone=${encodeURIComponent(W.timezone || "auto")}&forecast_days=5`;
+      // forecast_days=16 is Open-Meteo's max free-tier horizon; the trip is far
+      // beyond that until ~2 weeks out, at which point matching days populate
+      // automatically (see app.js renderTripForecast).
+      + `&timezone=${encodeURIComponent(W.timezone || "auto")}&forecast_days=16`;
     return fetch(url).then((r) => {
       if (!r.ok) throw new Error("weather http " + r.status);
       return r.json();
@@ -42,6 +45,7 @@
       const [e] = decode(daily.weather_code[i]);
       const dt = new Date(iso + "T12:00:00");
       return {
+        iso,
         label: dt.toLocaleDateString(undefined, { weekday: "short" }),
         emoji: e,
         hi: Math.round(daily.temperature_2m_max[i]),

@@ -149,10 +149,14 @@ body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71
 .wx-emoji{font-size:52px;line-height:1}
 .wx-temp{font-size:44px;font-weight:800}
 .wx-desc{color:rgba(255,255,255,.85)}
-.wx-forecast{display:flex;justify-content:space-between;gap:6px;margin-top:14px}
-.wx-day{flex:1;background:rgba(255,255,255,.1);border-radius:12px;padding:8px 4px;font-size:12px}
-.wx-day .d{font-weight:700}
-.wx-day .e{font-size:22px;margin:2px 0}
+/* ---------- Trip week forecast (auto-populates as the trip enters the ~16-day forecast window) ---------- */
+.trip-forecast-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.trip-day{background:rgba(255,255,255,.1);border-radius:12px;padding:9px 4px;font-size:12px;text-align:center}
+.trip-day .d{font-weight:700}
+.trip-day .n{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:2px}
+.trip-day .e{font-size:22px;margin:3px 0}
+.trip-day.pending{opacity:.55}
+.trip-day .t{font-weight:600}
 
 .sync-status{font-size:14px}
 .sync-status.on{color:var(--turq-bright)}

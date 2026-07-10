@@ -489,8 +489,34 @@
   }
 
   // -------------------------------------------------------------- INFO / weather
+  const SEASONAL_NOTE = "Typical late Sep/early Oct in Barbados: 84–88°F, brief tropical showers that pass quickly. "
+    + "This falls within Atlantic hurricane season, though Barbados sits at the southern edge and sees direct hits far less often than islands further north — still worth having travel insurance.";
+
+  function renderTripForecastGrid(forecastDays) {
+    const grid = $("#trip-forecast-grid");
+    const byIso = {};
+    (forecastDays || []).forEach((d) => { byIso[d.iso] = d; });
+    grid.innerHTML = (TRIP.days || []).map((iso) => {
+      const d = new Date(iso + "T12:00:00");
+      const dow = d.toLocaleDateString(undefined, { weekday: "short" });
+      const num = d.getDate();
+      const match = byIso[iso];
+      if (match) {
+        return `<div class="trip-day"><div class="d">${dow}</div><div class="n">${num}</div>
+          <div class="e">${match.emoji}</div><div class="t">${match.hi}°/${match.lo}°</div></div>`;
+      }
+      return `<div class="trip-day pending"><div class="d">${dow}</div><div class="n">${num}</div>
+        <div class="e">🔮</div><div class="t">—</div></div>`;
+    }).join("");
+    const anyLive = (TRIP.days || []).some((iso) => byIso[iso]);
+    $("#trip-forecast-note").textContent = anyLive
+      ? SEASONAL_NOTE
+      : "🔮 days = forecast isn't out yet (Open-Meteo predicts ~16 days ahead). This fills in on its own as the trip gets closer — no need to check back manually. " + SEASONAL_NOTE;
+  }
+
   function initInfo() {
     if (CFG.weather) $("#info-loc").textContent = CFG.weather.locationName || "";
+    renderTripForecastGrid([]); // draw the 6 dated placeholders immediately, independent of network
     if (!window.Weather) return;
     Weather.fetch().then((wx) => {
       $("#weather-card").innerHTML = `
@@ -498,11 +524,8 @@
           <span class="wx-emoji">${wx.emoji}</span>
           <span class="wx-temp">${wx.temp}°</span>
         </div>
-        <div class="wx-desc">${esc(wx.desc)} · feels like paradise · 💨 ${wx.wind} mph · 💧 ${wx.humidity}%</div>
-        <div class="wx-forecast">
-          ${wx.forecast.map((d) => `<div class="wx-day"><div class="d">${esc(d.label)}</div>
-            <div class="e">${d.emoji}</div><div>${d.hi}°/${d.lo}°</div></div>`).join("")}
-        </div>`;
+        <div class="wx-desc">Right now in St. Lawrence Gap · ${esc(wx.desc)} · 💨 ${wx.wind} mph · 💧 ${wx.humidity}%</div>`;
+      renderTripForecastGrid(wx.forecast);
       if (wx.today) {
         const sr = new Date(wx.today.sunrise).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
         const ss = new Date(wx.today.sunset).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -511,7 +534,7 @@
       }
     }).catch((err) => {
       console.warn("weather failed", err);
-      $("#weather-card").innerHTML = `<p>Couldn't load live weather (offline?). Barbados averages a lovely <b>84–88°F</b> in late September. ☀️</p>`;
+      $("#weather-card").innerHTML = `<p>Couldn't load live weather right now (offline?). ${SEASONAL_NOTE}</p>`;
     });
   }
 
