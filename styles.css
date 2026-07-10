@@ -37,7 +37,9 @@ body{
 /* Background photo layer */
 #bg-layer{position:fixed;inset:0;background-size:cover;background-position:center;z-index:-2;opacity:0;transition:opacity .6s}
 #bg-layer.show{opacity:1}
-#bg-scrim{position:fixed;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(11,61,71,.55),rgba(11,61,71,.82))}
+#bg-scrim{position:fixed;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(11,61,71,.55),rgba(11,61,71,.82));transition:background .3s}
+/* Let the couple photo show through more clearly behind Love Notes */
+body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71,.24),rgba(11,61,71,.46))}
 
 #app{
   max-width:560px;margin:0 auto;
@@ -63,6 +65,16 @@ body{
 
 .milestone{margin:20px auto 0;max-width:420px;background:linear-gradient(135deg,var(--coral),var(--gold));color:var(--ink);font-weight:800;padding:14px 16px;border-radius:16px;box-shadow:var(--shadow);font-size:16px}
 .milestone:empty{display:none}
+
+/* ---------- Home photo strip (below countdown) ---------- */
+.home-photos{max-width:420px;margin:26px auto 0;padding:0 4px}
+.home-photos-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.home-photos-head h3{margin:0;font-size:16px}
+.link-btn{background:none;border:none;color:var(--turq-bright);font-size:13px;font-weight:700;cursor:pointer;padding:4px}
+.home-photo-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.home-photo-strip::-webkit-scrollbar{display:none}
+.home-photo-strip img{flex:0 0 auto;width:76px;height:76px;object-fit:cover;border-radius:14px;border:1px solid var(--card-border);cursor:pointer}
+.home-photo-empty{font-size:13px;color:rgba(255,255,255,.6);padding:10px 2px}
 
 /* ---------- Panels ---------- */
 .panel-head{padding:18px 4px 8px}
@@ -107,11 +119,11 @@ body{
 .day-group{margin:6px 0 2px}
 .day-heading{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:16px 4px 8px}
 
-/* ---------- Feed (notes) ---------- */
+/* ---------- Feed (notes) — kept fairly translucent so the couple photo shows through ---------- */
 .feed-list{display:flex;flex-direction:column;gap:12px}
-.note{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px;position:relative}
-.note-text{font-size:16px;line-height:1.4;white-space:pre-wrap;word-break:break-word}
-.note-foot{margin-top:8px;font-size:12px;color:rgba(255,255,255,.7);display:flex;justify-content:space-between}
+.note{background:rgba(255,255,255,.09);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px;position:relative;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.note-text{font-size:16px;line-height:1.4;white-space:pre-wrap;word-break:break-word;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.note-foot{margin-top:8px;font-size:12px;color:rgba(255,255,255,.8);display:flex;justify-content:space-between;text-shadow:0 1px 3px rgba(0,0,0,.5)}
 .note-from{font-weight:700;color:var(--gold)}
 .note.from-Kelli{border-left:3px solid var(--coral)}
 .note.from-Nick{border-left:3px solid var(--turq)}
@@ -130,6 +142,8 @@ body{
 .info-card ul{margin:6px 0 0;padding-left:18px}
 .info-card li{margin:4px 0}
 .info-card p{margin:6px 0;line-height:1.45;color:rgba(255,255,255,.9)}
+.info-note{font-size:12px;color:rgba(255,255,255,.65);margin-top:10px;line-height:1.4}
+.offsite-card{border-left:3px solid var(--coral)}
 .weather-card{text-align:center}
 .wx-now{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px}
 .wx-emoji{font-size:52px;line-height:1}
@@ -150,30 +164,39 @@ body{
 .cal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 4px}
 .cal-tile{
   aspect-ratio:1;background:var(--glass);border:1px solid var(--card-border);border-radius:20px;
-  padding:14px 12px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;
+  padding:12px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;
   color:#fff;cursor:pointer;overflow:hidden;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   font-family:inherit;box-shadow:var(--shadow);
 }
 .cal-tile:active{transform:scale(.97)}
-.cal-tile-dow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);font-weight:700}
-.cal-tile-num{font-size:32px;font-weight:800;line-height:1.15}
-.cal-tile-mon{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:8px}
-.cal-tile-events{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;gap:4px;overflow:hidden}
-.cal-tile-event{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.16);border-radius:7px;padding:4px 7px;font-size:12px;width:100%}
-.cal-tile-more{font-size:11px;color:rgba(255,255,255,.65);margin-top:1px}
-.cal-tile-empty{font-size:12px;color:rgba(255,255,255,.5);margin-top:auto}
+.cal-tile-head{display:flex;align-items:baseline;gap:5px;margin-bottom:8px}
+.cal-tile-dow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.cal-tile-num{font-size:19px;font-weight:800;line-height:1}
+.cal-tile-mon{font-size:11px;color:rgba(255,255,255,.7)}
 
-.someday-btn{display:flex;align-items:center;justify-content:space-between;width:100%;margin:4px 0 16px;
-  background:var(--glass);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px;
-  color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit}
-.someday-btn .tag{background:var(--coral);font-weight:700}
-.someday-btn .tag:empty{display:none}
+/* Packing grid (two tiles side by side, same visual language) */
+.pack-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 4px}
+.pack-tile{
+  aspect-ratio:1;background:var(--glass);border:1px solid var(--card-border);border-radius:20px;
+  padding:14px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;
+  color:#fff;cursor:pointer;overflow:hidden;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  font-family:inherit;box-shadow:var(--shadow);
+}
+.pack-tile:active{transform:scale(.97)}
+.pack-tile-name{font-size:20px;font-weight:800}
+.pack-tile-sub{font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px}
 
-/* ---------- Day sheet (bottom sheet overlay) ---------- */
-.day-sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end}
-.day-sheet[hidden]{display:none}
-.day-sheet-backdrop{position:absolute;inset:0;background:rgba(4,20,24,.6)}
-.day-sheet-panel{
+/* Shared preview-chip styles for both cal-tile and pack-tile bodies */
+.cal-tile-events,.pack-tile-events{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.tile-chip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.16);border-radius:7px;padding:4px 7px;font-size:12px;width:100%}
+.tile-more{font-size:11px;color:rgba(255,255,255,.65);margin-top:1px}
+.tile-empty{font-size:12px;color:rgba(255,255,255,.5);margin-top:auto}
+
+/* ---------- Bottom sheet overlay (planner day / packing person) ---------- */
+.sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end}
+.sheet[hidden]{display:none}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(4,20,24,.6)}
+.sheet-panel{
   position:relative;z-index:1;width:100%;max-width:560px;margin:0 auto;
   background:linear-gradient(180deg,#134450,#0a2b32);border-radius:24px 24px 0 0;
   padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 16px);
@@ -181,12 +204,12 @@ body{
   box-shadow:0 -12px 40px rgba(0,0,0,.45);animation:sheet-up .22s ease-out;
 }
 @keyframes sheet-up{from{transform:translateY(24px);opacity:.5}to{transform:translateY(0);opacity:1}}
-.day-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-.day-sheet-head h3{margin:0;font-size:19px;font-weight:800;flex:1;text-align:center}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sheet-head h3{margin:0;font-size:19px;font-weight:800;flex:1;text-align:center}
 .sheet-close,.sheet-add{flex:0 0 auto;background:var(--glass);border:1px solid var(--card-border);color:#fff;
   width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .sheet-add{background:var(--coral);border-color:var(--coral)}
-#day-sheet-list{overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+#day-sheet-list,#pack-sheet-list{overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 .btn-add-block{width:100%;margin-top:8px}
 .add-form input[type=time]{flex:0 0 auto;width:auto;background:rgba(255,255,255,.16);border:1px solid var(--card-border);
   border-radius:12px;padding:10px 12px;color:#fff;font-size:15px;color-scheme:dark}

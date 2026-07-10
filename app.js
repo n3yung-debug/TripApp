@@ -18,6 +18,7 @@
     function show(name) {
       panels.forEach((p) => (p.hidden = p.dataset.panel !== name));
       tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+      document.body.dataset.tab = name;
       window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
       try { localStorage.setItem("tripapp_tab", name); } catch {}
     }
@@ -157,13 +158,12 @@
 
   // -------------------------------------------------------------- PLANNER
   const TYPE_META = {
-    excursion: ["🤿", "Excursion"], dining: ["🍽️", "Dining"],
-    activity: ["🏖️", "Activity"], idea: ["💡", "Idea"],
+    excursion: ["🤿", "Excursion"], dining: ["🍽️", "Dining"], idea: ["💡", "Idea"],
   };
-  const TILE_PREVIEW_MAX = 3;
+  const TILE_PREVIEW_MAX = 5;
   let planFilter = "all";
   let currentPlans = [];
-  let openDay = null; // iso string, "" for someday, or null when sheet is closed
+  let openDay = null; // iso string, or null when sheet is closed
 
   function fmtTime(t) {
     if (!t) return "";
@@ -185,7 +185,7 @@
 
   function initPlanner() {
     // type filter chips
-    const filters = [["all", "All"], ["excursion", "🤿"], ["dining", "🍽️"], ["activity", "🏖️"], ["idea", "💡"]];
+    const filters = [["all", "All"], ["excursion", "🤿"], ["dining", "🍽️"], ["idea", "💡"]];
     const fr = $("#plan-filters");
     filters.forEach(([val, label]) => {
       const b = document.createElement("button");
@@ -208,19 +208,19 @@
       tile.type = "button";
       tile.className = "cal-tile"; tile.dataset.day = iso;
       tile.innerHTML = `
-        <span class="cal-tile-dow">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
-        <span class="cal-tile-num">${d.getDate()}</span>
-        <span class="cal-tile-mon">${d.toLocaleDateString(undefined, { month: "short" })}</span>
+        <div class="cal-tile-head">
+          <span class="cal-tile-dow">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+          <span class="cal-tile-num">${d.getDate()}</span>
+          <span class="cal-tile-mon">${d.toLocaleDateString(undefined, { month: "short" })}</span>
+        </div>
         <div class="cal-tile-events" data-events-for="${iso}"></div>`;
       tile.addEventListener("click", () => openDaySheet(iso));
       grid.appendChild(tile);
     });
 
-    $("#someday-btn").addEventListener("click", () => openDaySheet(""));
-
     // day sheet controls
     $("#day-sheet-close").addEventListener("click", closeDaySheet);
-    $("#day-sheet").querySelector(".day-sheet-backdrop").addEventListener("click", closeDaySheet);
+    $("#day-sheet").querySelector(".sheet-backdrop").addEventListener("click", closeDaySheet);
     $("#day-sheet-add-btn").addEventListener("click", () => {
       const form = $("#day-add-form");
       form.hidden = !form.hidden;
@@ -250,22 +250,20 @@
       const rows = itemsFor(iso);
       const box = $(`.cal-tile-events[data-events-for="${iso}"]`);
       if (!box) return;
-      if (!rows.length) { box.innerHTML = `<span class="cal-tile-empty">Tap to add</span>`; return; }
+      if (!rows.length) { box.innerHTML = `<span class="tile-empty">Tap to add</span>`; return; }
       const shown = rows.slice(0, TILE_PREVIEW_MAX);
       const rest = rows.length - shown.length;
       box.innerHTML = shown.map((r) => {
         const [emoji] = TYPE_META[r.type] || ["•"];
         const t = r.time ? fmtTime(r.time) + " · " : "";
-        return `<span class="cal-tile-event">${emoji} ${t}${esc(r.title)}</span>`;
-      }).join("") + (rest > 0 ? `<span class="cal-tile-more">+${rest} more</span>` : "");
+        return `<span class="tile-chip">${emoji} ${t}${esc(r.title)}</span>`;
+      }).join("") + (rest > 0 ? `<span class="tile-more">+${rest} more</span>` : "");
     });
-    const somedayCount = itemsFor("").length;
-    $("#someday-count").textContent = somedayCount ? somedayCount : "";
   }
 
   function openDaySheet(day) {
     openDay = day;
-    $("#day-sheet-title").textContent = day ? dayLabel(day) : "💡 Someday / wishlist";
+    $("#day-sheet-title").textContent = dayLabel(day);
     $("#day-add-form").hidden = true;
     $("#day-add-title").value = "";
     $("#day-add-time").value = "";
@@ -294,7 +292,7 @@
 
   // -------------------------------------------------------------- PACKING
   const PACK_SEED = [
-    ["Passports", "Documents"], ["Sandals booking confirmation", "Documents"],
+    ["Passport", "Documents"], ["Sandals booking confirmation", "Documents"],
     ["Sunscreen (reef-safe)", "Toiletries"], ["Aloe / after-sun", "Toiletries"],
     ["Swimsuits", "Beach"], ["Beach cover-up", "Beach"], ["Sunglasses", "Beach"],
     ["Sun hat", "Beach"], ["Flip flops", "Beach"], ["Snorkel gear (optional)", "Beach"],
@@ -303,39 +301,106 @@
     ["Bug spray", "Toiletries"], ["Meds / vitamins", "Toiletries"],
     ["Cash for tips (USD)", "Documents"],
   ];
-  function initPacking() {
-    $("#pack-form").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const title = $("#pack-title").value.trim();
-      if (!title) return;
-      Store.add("packing", { title, category: $("#pack-cat").value, done: false });
-      $("#pack-title").value = "";
-    });
-    $("#pack-seed").addEventListener("click", () => {
-      if (!confirm("Add ~18 suggested resort essentials to your list?")) return;
-      PACK_SEED.forEach(([title, category]) => Store.add("packing", { title, category, done: false }));
-    });
-    Store.subscribe("packing", renderPacking);
-  }
-  function renderPacking(rows) {
-    const list = $("#pack-list");
-    list.innerHTML = "";
-    const done = rows.filter((r) => r.done).length;
-    $("#pack-count").textContent = rows.length ? `${done}/${rows.length} packed` : "Nothing on the list yet.";
-    if (!rows.length) { list.appendChild(emptyMsg("Add items, or tap “resort essentials” below 🧳")); return; }
+  const PACK_OWNERS = ["Kelli", "Nick"];
+  const PACK_TILE_PREVIEW_MAX = 5;
+  let currentPacking = [];
+  let openOwner = null;
 
-    const groups = {};
-    rows.forEach((r) => { (groups[r.category || "Other"] = groups[r.category || "Other"] || []).push(r); });
-    Object.keys(groups).sort().forEach((cat) => {
-      const h = document.createElement("div");
-      h.className = "day-heading"; h.textContent = cat;
-      list.appendChild(h);
-      groups[cat].sort((a, b) => (a.done - b.done));
-      groups[cat].forEach((r) => list.appendChild(checkRow({
+  function packItemsFor(owner) {
+    return currentPacking.filter((r) => r.owner === owner)
+      .sort((a, b) => (a.done - b.done) || (a.category || "").localeCompare(b.category || "") || (a.createdAt - b.createdAt));
+  }
+
+  function initPacking() {
+    const grid = $("#pack-grid");
+    PACK_OWNERS.forEach((owner) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "pack-tile"; tile.dataset.owner = owner;
+      tile.innerHTML = `
+        <span class="pack-tile-name">${esc(owner)}</span>
+        <span class="pack-tile-sub" data-sub-for="${owner}"></span>
+        <div class="pack-tile-events" data-events-for="${owner}"></div>`;
+      tile.addEventListener("click", () => openPackSheet(owner));
+      grid.appendChild(tile);
+    });
+
+    $("#pack-sheet-close").addEventListener("click", closePackSheet);
+    $("#pack-sheet").querySelector(".sheet-backdrop").addEventListener("click", closePackSheet);
+    $("#pack-sheet-add-btn").addEventListener("click", () => {
+      const form = $("#pack-add-form");
+      form.hidden = !form.hidden;
+      if (!form.hidden) $("#pack-add-title").focus();
+    });
+    $("#pack-add-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const title = $("#pack-add-title").value.trim();
+      if (!title || openOwner === null) return;
+      Store.add("packing", { title, category: $("#pack-add-cat").value, owner: openOwner, done: false });
+      $("#pack-add-title").value = "";
+    });
+
+    $("#pack-seed").addEventListener("click", () => {
+      if (!confirm("Add ~18 suggested resort essentials to both Kelli's and Nick's lists?")) return;
+      PACK_OWNERS.forEach((owner) => {
+        PACK_SEED.forEach(([title, category]) => Store.add("packing", { title, category, owner, done: false }));
+      });
+    });
+
+    Store.subscribe("packing", (rows) => {
+      currentPacking = rows;
+      renderPackGrid();
+      if (openOwner !== null) renderPackSheetList();
+    });
+  }
+
+  function renderPackGrid() {
+    PACK_OWNERS.forEach((owner) => {
+      const rows = packItemsFor(owner);
+      const done = rows.filter((r) => r.done).length;
+      $(`.pack-tile-sub[data-sub-for="${owner}"]`).textContent = rows.length ? `${done}/${rows.length} packed` : "Tap to add";
+      const box = $(`.pack-tile-events[data-events-for="${owner}"]`);
+      if (!rows.length) { box.innerHTML = `<span class="tile-empty">Nothing yet</span>`; return; }
+      const todo = rows.filter((r) => !r.done);
+      const shown = (todo.length ? todo : rows).slice(0, PACK_TILE_PREVIEW_MAX);
+      const rest = (todo.length ? todo.length : rows.length) - shown.length;
+      box.innerHTML = shown.map((r) => `<span class="tile-chip">${r.done ? "✓ " : ""}${esc(r.title)}</span>`).join("")
+        + (rest > 0 ? `<span class="tile-more">+${rest} more</span>` : "")
+        + (!todo.length && rows.length ? `<span class="tile-chip">🎉 All packed!</span>` : "");
+    });
+  }
+
+  function openPackSheet(owner) {
+    openOwner = owner;
+    $("#pack-sheet-title").textContent = `${owner}'s List`;
+    $("#pack-add-form").hidden = true;
+    $("#pack-add-title").value = "";
+    renderPackSheetList();
+    $("#pack-sheet").hidden = false;
+  }
+  function closePackSheet() {
+    $("#pack-sheet").hidden = true;
+    openOwner = null;
+  }
+  function renderPackSheetList() {
+    const list = $("#pack-sheet-list");
+    list.innerHTML = "";
+    const rows = packItemsFor(openOwner);
+    if (!rows.length) { list.appendChild(emptyMsg("Nothing yet — tap ＋ to add the first item 🧳")); return; }
+    let lastCat = null;
+    rows.forEach((r) => {
+      const cat = r.category || "Other";
+      if (cat !== lastCat) {
+        const h = document.createElement("div");
+        h.className = "day-heading"; h.textContent = cat;
+        list.appendChild(h);
+        lastCat = cat;
+      }
+      list.appendChild(checkRow({
         title: r.title, done: r.done, meta: "",
         onToggle: () => Store.update("packing", r.id, { done: !r.done }),
         onDelete: () => Store.remove("packing", r.id),
-      })));
+      }));
     });
   }
 
@@ -399,6 +464,27 @@
         if (confirm("Remove this photo?")) Store.remove("photos", r.id);
       });
       grid.appendChild(fig);
+    });
+  }
+
+  // -------------------------------------------------------------- HOME PHOTO STRIP
+  function initHomePhotos() {
+    $("#home-photos-more").addEventListener("click", () => {
+      $('.tab[data-tab="photos"]').click();
+    });
+    Store.subscribe("photos", (rows) => {
+      const strip = $("#home-photo-strip");
+      strip.innerHTML = "";
+      if (!rows.length) {
+        strip.innerHTML = `<span class="home-photo-empty">Add your first photo in the 📸 tab</span>`;
+        return;
+      }
+      rows.slice().reverse().slice(0, 10).forEach((r) => {
+        const img = document.createElement("img");
+        img.loading = "lazy"; img.src = r.url; img.alt = r.caption || "memory";
+        img.addEventListener("click", () => $('.tab[data-tab="photos"]').click());
+        strip.appendChild(img);
+      });
     });
   }
 
@@ -500,6 +586,7 @@
     initPacking();
     initNotes();
     initPhotos();
+    initHomePhotos();
     initInfo();
     initSyncStatus();
     updateCountdown();

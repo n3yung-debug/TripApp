@@ -62,7 +62,7 @@ window.TRIPAPP_CONFIG = {
   weather: {
     latitude: 13.073,
     longitude: -59.583,
-    locationName: "Christ Church, Barbados",
+    locationName: "St. Lawrence Gap, Christ Church, Barbados",
     timezone: "America/Barbados"
   }
 };

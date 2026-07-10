@@ -44,6 +44,14 @@
 
         <p class="milestone" id="milestone"></p>
       </header>
+
+      <div class="home-photos">
+        <div class="home-photos-head">
+          <h3>📸 Memories</h3>
+          <button id="home-photos-more" class="link-btn" type="button">See all →</button>
+        </div>
+        <div id="home-photo-strip" class="home-photo-strip"></div>
+      </div>
     </section>
 
     <!-- ================= TRIP PLANNER ================= -->
@@ -55,30 +63,16 @@
 
       <div class="filter-row" id="plan-filters"></div>
       <div id="cal-grid" class="cal-grid"></div>
-      <button id="someday-btn" class="someday-btn" type="button">
-        <span>💡 Someday / wishlist</span><span id="someday-count" class="tag"></span>
-      </button>
     </section>
 
     <!-- ================= PACKING ================= -->
     <section class="tab-panel" data-panel="packing" hidden>
       <div class="panel-head">
         <h2>Packing List</h2>
-        <p class="panel-sub"><span id="pack-count"></span></p>
+        <p class="panel-sub">Tap a name to see &amp; add items.</p>
       </div>
-      <form id="pack-form" class="add-form">
-        <input id="pack-title" type="text" placeholder="Add an item…" maxlength="80" required />
-        <div class="add-form-row">
-          <select id="pack-cat" aria-label="Category">
-            <option>Beach</option><option>Clothes</option><option>Toiletries</option>
-            <option>Documents</option><option>Tech</option><option>Kelli</option>
-            <option>Nick</option><option>Other</option>
-          </select>
-          <button type="submit" class="btn-add">Add</button>
-        </div>
-      </form>
-      <div id="pack-list" class="card-list"></div>
       <button id="pack-seed" class="btn-ghost">✨ Add suggested resort essentials</button>
+      <div id="pack-grid" class="pack-grid"></div>
     </section>
 
     <!-- ================= LOVE NOTES ================= -->
@@ -121,27 +115,36 @@
       </div>
       <div id="weather-card" class="info-card weather-card">Loading weather…</div>
       <div id="sun-card" class="info-card"></div>
+
       <div class="info-card">
-        <h3>💵 Money</h3>
-        <p>Currency: <b>Barbadian dollar (BBD)</b>, pegged at <b>2 BBD = 1 USD</b>. USD is widely accepted; you'll often get change in BBD. Tipping ~10–15% (check if already added).</p>
+        <h3>🏨 On Resort — Don't Miss</h3>
+        <ul>
+          <li>Hop between the resort's restaurants &amp; swim-up bars — a different spot every night, all included.</li>
+          <li>Private beach + included water sports: kayaks, paddleboards, sailing, snorkel gear.</li>
+          <li>Red Lane Spa — book a couples massage early, the good slots go fast.</li>
+          <li>Nightly entertainment — live music, beach parties, movies under the stars.</li>
+          <li>Swim-up pool bar &amp; hot tub for sunset drinks.</li>
+        </ul>
+        <p class="info-note">Exact activities &amp; schedule vary by package — check the Sandals app or concierge desk for what's on each day.</p>
       </div>
+
+      <div class="info-card offsite-card">
+        <h3>🚕 Just Outside the Gate</h3>
+        <p class="info-note" style="margin-top:0">Clearly off-resort — both very close by.</p>
+        <ul>
+          <li><b>St. Lawrence Gap</b> — Barbados's liveliest strip, an easy walk/short ride from the resort: casual bars, live music, beachside restaurants.</li>
+          <li><b>Oistins Fish Fry</b> (Fri nights) — a short, easy ride away; the classic Bajan fish-fry-and-rum-punch night out.</li>
+        </ul>
+      </div>
+
       <div class="info-card">
         <h3>🗣️ Good to know</h3>
         <ul>
           <li>Language: English (Bajan dialect).</li>
           <li>Drives on the <b>left</b>.</li>
-          <li>Plugs: type A/B, 115V — same as the US.</li>
+          <li>Plugs: type A/B, 115V — same as the US, no adapter needed.</li>
           <li>Water is safe to drink.</li>
           <li>"Wuh gine on?" = "What's going on?" / hello.</li>
-        </ul>
-      </div>
-      <div class="info-card">
-        <h3>🏝️ Don't-miss</h3>
-        <ul>
-          <li>Swim with sea turtles on a catamaran cruise.</li>
-          <li>Oistins Fish Fry (Friday nights).</li>
-          <li>Harrison's Cave &amp; the east-coast surf at Bathsheba.</li>
-          <li>Sunset at the beach — see the exact time above.</li>
         </ul>
       </div>
     </section>
@@ -184,10 +187,10 @@
   </div>
 
   <!-- ================= DAY SHEET (planner day detail) ================= -->
-  <div id="day-sheet" class="day-sheet" hidden>
-    <div class="day-sheet-backdrop"></div>
-    <div class="day-sheet-panel">
-      <div class="day-sheet-head">
+  <div id="day-sheet" class="sheet" hidden>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-panel">
+      <div class="sheet-head">
         <button id="day-sheet-close" class="sheet-close" type="button" aria-label="Close">✕</button>
         <h3 id="day-sheet-title">Day</h3>
         <button id="day-sheet-add-btn" class="sheet-add" type="button" aria-label="Add event">＋</button>
@@ -199,13 +202,35 @@
           <select id="day-add-type" aria-label="Type">
             <option value="excursion">🤿 Excursion</option>
             <option value="dining">🍽️ Dining</option>
-            <option value="activity">🏖️ Activity</option>
             <option value="idea">💡 Idea</option>
           </select>
         </div>
         <button type="submit" class="btn-add btn-add-block">Add to this day</button>
       </form>
       <div id="day-sheet-list" class="card-list"></div>
+    </div>
+  </div>
+
+  <!-- ================= PACK SHEET (packing person detail) ================= -->
+  <div id="pack-sheet" class="sheet" hidden>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <button id="pack-sheet-close" class="sheet-close" type="button" aria-label="Close">✕</button>
+        <h3 id="pack-sheet-title">Name</h3>
+        <button id="pack-sheet-add-btn" class="sheet-add" type="button" aria-label="Add item">＋</button>
+      </div>
+      <form id="pack-add-form" class="add-form" hidden>
+        <input id="pack-add-title" type="text" placeholder="Add an item…" maxlength="80" required />
+        <div class="add-form-row">
+          <select id="pack-add-cat" aria-label="Category">
+            <option>Beach</option><option>Clothes</option><option>Toiletries</option>
+            <option>Documents</option><option>Tech</option><option>Other</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-add btn-add-block">Add item</button>
+      </form>
+      <div id="pack-sheet-list" class="card-list"></div>
     </div>
   </div>
 
