@@ -161,7 +161,43 @@
     activity: ["🏖️", "Activity"], idea: ["💡", "Idea"],
   };
   let planFilter = "all";
+  let planDayFilter = "all";
+  function initCalStrip() {
+    const strip = $("#cal-strip");
+    strip.innerHTML = "";
+    const allBtn = document.createElement("button");
+    allBtn.className = "cal-day active"; allBtn.dataset.day = "all";
+    allBtn.innerHTML = `<span class="cal-dow">All</span><span class="cal-num">🗺️</span><span class="cal-mon">Days</span>`;
+    strip.appendChild(allBtn);
+    (TRIP.days || []).forEach((iso) => {
+      const d = new Date(iso + "T12:00:00");
+      const b = document.createElement("button");
+      b.className = "cal-day"; b.dataset.day = iso;
+      b.innerHTML = `
+        <span class="cal-dow">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+        <span class="cal-num">${d.getDate()}</span>
+        <span class="cal-mon">${d.toLocaleDateString(undefined, { month: "short" })}</span>
+        <span class="cal-count" data-count-for="${iso}"></span>`;
+      strip.appendChild(b);
+    });
+    strip.addEventListener("click", (e) => {
+      const btn = e.target.closest(".cal-day");
+      if (!btn) return;
+      planDayFilter = btn.dataset.day;
+      $$(".cal-day", strip).forEach((c) => c.classList.toggle("active", c === btn));
+      renderPlans(currentPlans);
+    });
+  }
+  function updateCalCounts(rows) {
+    const counts = {};
+    rows.forEach((r) => { if (r.day) counts[r.day] = (counts[r.day] || 0) + 1; });
+    $$("#cal-strip .cal-count").forEach((el) => {
+      const day = el.dataset.countFor;
+      el.textContent = counts[day] ? counts[day] : "";
+    });
+  }
   function initPlanner() {
+    initCalStrip();
     // populate day dropdown
     const daySel = $("#plan-day");
     (TRIP.days || []).forEach((iso) => {
@@ -196,23 +232,28 @@
   }
   let currentPlans = [];
   function renderPlans(rows) {
+    updateCalCounts(rows);
     const list = $("#plan-list");
     list.innerHTML = "";
     let filtered = rows.slice();
     if (planFilter !== "all") filtered = filtered.filter((r) => r.type === planFilter);
+    if (planDayFilter !== "all") filtered = filtered.filter((r) => r.day === planDayFilter);
     if (!filtered.length) { list.appendChild(emptyMsg("Nothing yet — add your first plan above! 🗺️")); return; }
 
-    // group by day, "Someday" last
+    // group by day, "Someday" last (skip grouping headers when a single day is already selected)
     const groups = {};
     filtered.forEach((r) => { (groups[r.day || ""] = groups[r.day || ""] || []).push(r); });
     const dayKeys = (TRIP.days || []).filter((d) => groups[d]);
     if (groups[""]) dayKeys.push("");
+    const showHeadings = planDayFilter === "all";
 
     dayKeys.forEach((day) => {
-      const h = document.createElement("div");
-      h.className = "day-heading";
-      h.textContent = day ? dayLabel(day) : "💡 Someday / wishlist";
-      list.appendChild(h);
+      if (showHeadings) {
+        const h = document.createElement("div");
+        h.className = "day-heading";
+        h.textContent = day ? dayLabel(day) : "💡 Someday / wishlist";
+        list.appendChild(h);
+      }
       groups[day].sort((a, b) => (a.done - b.done) || (a.createdAt - b.createdAt));
       groups[day].forEach((r) => {
         const [emoji, tname] = TYPE_META[r.type] || ["•", r.type];
@@ -394,15 +435,36 @@
     Store.subscribeSettings((s) => { applyBackground(s.backgroundUrl || ""); });
   }
 
+  const ERROR_HINTS = [
+    [/permission.denied/i, "Firestore rules aren't published yet. Fix: Firebase console → Firestore Database → Rules → paste firestore.rules → Publish."],
+    [/storage\/unauthorized|storage\/unknown|does not exist/i, "Storage isn't set up yet. Fix: Firebase console → Storage → Get started, then Rules → paste storage.rules → Publish."],
+    [/admin-restricted-operation|operation-not-allowed/i, "Anonymous sign-in isn't enabled. Fix: Firebase console → Authentication → Sign-in method → enable Anonymous."],
+    [/network|unavailable/i, "Can't reach Firebase right now — check your connection."],
+  ];
+  function friendlyError(err) {
+    const hay = `${err.code || ""} ${err.message || ""}`;
+    const hit = ERROR_HINTS.find(([re]) => re.test(hay));
+    return hit ? hit[1] : `${err.area || "Sync"} error: ${err.message || err.code || "unknown"}`;
+  }
+  function showSyncError(err) {
+    const el = $("#sync-error");
+    if (!err) { el.textContent = ""; return; }
+    el.textContent = "⚠️ " + friendlyError(err);
+  }
   function initSyncStatus() {
     const el = $("#sync-status");
     if (Store.mode === "cloud") {
       el.textContent = "☁️ Live sync ON — you and Kelli share everything.";
       el.className = "sync-status on";
     } else {
-      el.textContent = "📱 Local mode — data is saved on this phone only. Add Firebase in config.js to sync.";
+      const hasConfig = !!(CFG.FIREBASE_CONFIG && CFG.FIREBASE_CONFIG.apiKey);
+      el.textContent = hasConfig
+        ? "📱 Local mode — Firebase is configured but couldn't connect (see below)."
+        : "📱 Local mode — data is saved on this phone only. Add Firebase in config.js to sync.";
       el.className = "sync-status off";
     }
+    showSyncError(Store.lastError);
+    window.addEventListener("store-error", (e) => showSyncError(e.detail));
   }
 
   // -------------------------------------------------------------- boot

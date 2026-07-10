@@ -29,7 +29,14 @@
     _db: null,
     _storage: null,
     _ready: null,
+    lastError: null, // { area, code, message } — most recent sync problem, for on-screen diagnostics
   };
+
+  function reportError(area, err) {
+    Store.lastError = { area, code: (err && err.code) || "", message: (err && err.message) || String(err) };
+    console.warn(`[Store:${area}]`, err);
+    window.dispatchEvent(new CustomEvent("store-error", { detail: Store.lastError }));
+  }
 
   // ---------------------------------------------------------------- helpers
   function uid() {
@@ -55,6 +62,9 @@
     if (Store._ready) return Store._ready;
     Store._ready = new Promise((resolve) => {
       const fbCfg = CFG.FIREBASE_CONFIG;
+      if (fbCfg && fbCfg.apiKey && !window.firebase) {
+        reportError("init", { message: "Firebase SDK didn't load (offline, or a network/adblock issue)." });
+      }
       const hasFirebase = fbCfg && fbCfg.apiKey && window.firebase;
       if (!hasFirebase) {
         Store.mode = "local";
@@ -72,14 +82,19 @@
           }
         });
         firebase.auth().signInAnonymously().catch((err) => {
-          console.warn("[Store] anon sign-in failed, falling back to local:", err);
+          reportError("auth", err);
           Store.mode = "local";
           resolve("local");
         });
         // Safety: if auth never resolves, fall back after 6s.
-        setTimeout(() => { if (Store.mode !== "cloud") resolve("local"); }, 6000);
+        setTimeout(() => {
+          if (Store.mode !== "cloud") {
+            if (!Store.lastError) reportError("auth", { message: "Timed out waiting for Firebase sign-in (slow/no connection?)." });
+            resolve("local");
+          }
+        }, 6000);
       } catch (err) {
-        console.warn("[Store] Firebase init failed, using local:", err);
+        reportError("init", err);
         Store.mode = "local";
         resolve("local");
       }
@@ -102,7 +117,7 @@
           snap.forEach((d) => rows.push(Object.assign({ id: d.id }, d.data())));
           cb(rows);
         },
-        (err) => { console.warn("[Store] subscribe error", name, err); cb(readLocal(name)); }
+        (err) => { reportError("subscribe:" + name, err); cb(readLocal(name)); }
       );
     }
     // local
@@ -116,7 +131,8 @@
   Store.add = function (name, obj) {
     const doc = Object.assign({ createdAt: Date.now() }, obj);
     if (Store.mode === "cloud") {
-      return coll(name).add(doc).then((ref) => ref.id);
+      return coll(name).add(doc).then((ref) => ref.id)
+        .catch((err) => { reportError("add:" + name, err); throw err; });
     }
     doc.id = uid();
     const arr = readLocal(name);
@@ -128,7 +144,8 @@
   // ---------------------------------------------------------------- update
   Store.update = function (name, id, patch) {
     if (Store.mode === "cloud") {
-      return coll(name).doc(id).update(patch);
+      return coll(name).doc(id).update(patch)
+        .catch((err) => { reportError("update:" + name, err); throw err; });
     }
     const arr = readLocal(name).map((r) => (r.id === id ? Object.assign(r, patch) : r));
     writeLocal(name, arr);
@@ -138,7 +155,8 @@
   // ---------------------------------------------------------------- remove
   Store.remove = function (name, id) {
     if (Store.mode === "cloud") {
-      return coll(name).doc(id).delete();
+      return coll(name).doc(id).delete()
+        .catch((err) => { reportError("remove:" + name, err); throw err; });
     }
     writeLocal(name, readLocal(name).filter((r) => r.id !== id));
     return Promise.resolve();
@@ -149,7 +167,7 @@
     if (Store.mode === "cloud") {
       return Store._db.collection("couples").doc(Store.coupleCode)
         .onSnapshot((d) => cb((d.exists && d.data().settings) || {}),
-                    () => cb(readLocalSettings()));
+                    (err) => { reportError("settings", err); cb(readLocalSettings()); });
     }
     const handler = (e) => { if (!e || !e.detail || e.detail.coll === "settings") cb(readLocalSettings()); };
     window.addEventListener("localstore-change", handler);
@@ -163,7 +181,8 @@
   Store.setSetting = function (key, value) {
     if (Store.mode === "cloud") {
       return Store._db.collection("couples").doc(Store.coupleCode)
-        .set({ settings: { [key]: value } }, { merge: true });
+        .set({ settings: { [key]: value } }, { merge: true })
+        .catch((err) => { reportError("settings-write", err); throw err; });
     }
     const s = readLocalSettings();
     s[key] = value;
@@ -179,7 +198,8 @@
       if (Store.mode === "cloud") {
         const path = `couples/${Store.coupleCode}/img/${uid()}.jpg`;
         const ref = Store._storage.ref().child(path);
-        return ref.put(blobOrDataUrl.blob).then(() => ref.getDownloadURL()).then((url) => ({ url }));
+        return ref.put(blobOrDataUrl.blob).then(() => ref.getDownloadURL()).then((url) => ({ url }))
+          .catch((err) => { reportError("upload", err); throw err; });
       }
       return { url: blobOrDataUrl.dataUrl };
     });

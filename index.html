@@ -53,6 +53,8 @@
         <p class="panel-sub">Excursions, dinners &amp; plans — tag each to a day.</p>
       </div>
 
+      <div id="cal-strip" class="cal-strip"></div>
+
       <form id="plan-form" class="add-form">
         <input id="plan-title" type="text" placeholder="e.g. Catamaran &amp; turtle snorkel" maxlength="120" required />
         <div class="add-form-row">
@@ -166,6 +168,7 @@
       <div class="info-card">
         <h3>☁️ Sync</h3>
         <p id="sync-status" class="sync-status">Checking…</p>
+        <p id="sync-error" class="sync-error"></p>
         <label class="field">
           <span>Couple code (both phones must match)</span>
           <input id="couple-code-input" type="text" placeholder="our-secret-code" />

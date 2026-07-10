@@ -143,6 +143,19 @@ body{
 .sync-status{font-size:14px}
 .sync-status.on{color:var(--turq-bright)}
 .sync-status.off{color:var(--gold)}
+.sync-error{font-size:13px;color:var(--coral-soft);margin-top:6px;line-height:1.4}
+.sync-error:empty{display:none}
+
+/* ---------- Calendar strip ---------- */
+.cal-strip{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.cal-strip::-webkit-scrollbar{display:none}
+.cal-day{flex:0 0 auto;min-width:58px;background:var(--glass);border:1px solid var(--card-border);border-radius:14px;padding:10px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;color:#fff;cursor:pointer;position:relative}
+.cal-day.active{background:var(--turq);border-color:var(--turq);color:var(--ink)}
+.cal-dow{font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.cal-num{font-size:20px;font-weight:800;line-height:1.1}
+.cal-mon{font-size:10px;opacity:.8}
+.cal-count{position:absolute;top:-6px;right:-6px;background:var(--coral);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.cal-count:empty{display:none}
 .app-version{text-align:center;color:rgba(255,255,255,.5);font-size:12px;margin-top:20px}
 
 .empty{text-align:center;color:rgba(255,255,255,.65);padding:28px 10px;font-size:15px}

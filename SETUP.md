@@ -71,6 +71,16 @@ Live weather needs **no key** — it just works.
 > under **You → Settings**) the same on both phones. It's good privacy for a
 > personal app, not bank-grade — don't store secrets in it.
 
+### 2.6 If something doesn't sync
+
+Open **You → Settings** in the app. It now shows a live diagnostic:
+- **"☁️ Live sync ON"** = connected.
+- **"📱 Local mode..."** + a **⚠️ red line underneath** = tells you exactly
+  what's missing (e.g. "Firestore rules aren't published yet" or "Anonymous
+  sign-in isn't enabled") and which step above to redo. Each of steps
+  2.2–2.4 has its own **Rules** tab that must be *published*, not just
+  viewed — that's the most common thing to miss.
+
 ---
 
 ## 3. ☀️ Weather — nothing to do
