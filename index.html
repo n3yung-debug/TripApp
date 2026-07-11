@@ -68,8 +68,12 @@
     <!-- ================= PACKING ================= -->
     <section class="tab-panel" data-panel="packing" hidden>
       <div class="panel-head">
-        <h2>Packing List</h2>
-        <p class="panel-sub">Tap a name to see &amp; add items.</p>
+        <h2>Lists</h2>
+        <p class="panel-sub">Tap a name to see, add &amp; import items.</p>
+      </div>
+      <div id="pack-seg" class="seg">
+        <button type="button" class="seg-btn active" data-list="packing">🧳 Packing</button>
+        <button type="button" class="seg-btn" data-list="shopping">🛒 Shopping</button>
       </div>
       <button id="pack-seed" class="btn-ghost">✨ Add suggested resort essentials</button>
       <div id="pack-grid" class="pack-grid"></div>
@@ -240,6 +244,12 @@
           </select>
         </div>
         <button type="submit" class="btn-add btn-add-block">Add item</button>
+      </form>
+      <button id="pack-import-toggle" class="link-btn pack-import-toggle" type="button">📋 Paste / import a list from Notes</button>
+      <form id="pack-import-form" class="add-form" hidden>
+        <textarea id="pack-import-text" rows="6" placeholder="Paste your list here — one item per line (or comma-separated). Bullets, checkboxes and numbers are cleaned up automatically.&#10;&#10;Example:&#10;- Sunscreen&#10;- Swimsuits&#10;- Sandals"></textarea>
+        <p class="import-count" id="pack-import-count"></p>
+        <button type="submit" class="btn-add btn-add-block">Add items</button>
       </form>
       <div id="pack-sheet-list" class="card-list"></div>
     </div>

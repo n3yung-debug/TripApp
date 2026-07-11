@@ -1,6 +1,6 @@
 /* Service worker — offline app shell.
    Bump CACHE version when you change files to force an update. */
-const CACHE = "tripapp-v4";
+const CACHE = "tripapp-v5";
 const ASSETS = [
   "./",
   "./index.html",

@@ -303,12 +303,50 @@
   ];
   const PACK_OWNERS = ["Kelli", "Nick"];
   const PACK_TILE_PREVIEW_MAX = 5;
+  const PACK_IMPORT_MAX = 200;
+  const PACK_LABELS = {
+    packing: { verb: "packed", allDone: "🎉 All packed!", icon: "🧳", noun: "Packing" },
+    shopping: { verb: "got", allDone: "🎉 All bought!", icon: "🛒", noun: "Shopping" },
+  };
   let currentPacking = [];
   let openOwner = null;
+  let packList = "packing"; // "packing" | "shopping" — active section
 
-  function packItemsFor(owner) {
-    return currentPacking.filter((r) => r.owner === owner)
+  // Existing items (pre-shopping-split) have no `list`; treat them as packing.
+  function itemList(r) { return r.list || "packing"; }
+  function packItemsFor(list, owner) {
+    return currentPacking.filter((r) => itemList(r) === list && r.owner === owner)
       .sort((a, b) => (a.done - b.done) || (a.category || "").localeCompare(b.category || "") || (a.createdAt - b.createdAt));
+  }
+
+  // Parse pasted text (iPhone Notes etc.) into clean individual items.
+  function parseListText(text) {
+    if (!text) return [];
+    let lines = text.split(/\r?\n/);
+    // Single comma-separated line -> split on commas.
+    if (lines.filter((l) => l.trim()).length <= 1 && text.indexOf(",") !== -1) {
+      lines = text.split(",");
+    }
+    const seen = new Set();
+    const out = [];
+    for (let raw of lines) {
+      let s = raw.trim();
+      if (!s) continue;
+      s = s.replace(/^[\-\*•◦‣·⁃∙\s]+/, "");            // bullets / dashes
+      s = s.replace(/^\[[ xX✓]?\]\s*/, "");                                      // [ ] [x]
+      s = s.replace(/^[☐☑☒✅✔✓❌□■○●]\s*/, ""); // checkbox glyphs
+      s = s.replace(/^\d+[\.\)]\s*/, "");                                             // 1.  2)
+      s = s.replace(/^[\-\*•\s]+/, "");                                          // leftover bullet
+      s = s.trim();
+      if (!s) continue;
+      if (s.length > 80) s = s.slice(0, 80);
+      const key = s.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
+      if (out.length >= PACK_IMPORT_MAX) break;
+    }
+    return out;
   }
 
   function initPacking() {
@@ -325,25 +363,54 @@
       grid.appendChild(tile);
     });
 
+    // Packing / Shopping segmented control
+    $("#pack-seg").addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      packList = btn.dataset.list;
+      $$(".seg-btn", $("#pack-seg")).forEach((b) => b.classList.toggle("active", b === btn));
+      $("#pack-seed").style.display = packList === "packing" ? "" : "none";
+      renderPackGrid();
+    });
+
     $("#pack-sheet-close").addEventListener("click", closePackSheet);
     $("#pack-sheet").querySelector(".sheet-backdrop").addEventListener("click", closePackSheet);
     $("#pack-sheet-add-btn").addEventListener("click", () => {
       const form = $("#pack-add-form");
       form.hidden = !form.hidden;
-      if (!form.hidden) $("#pack-add-title").focus();
+      if (!form.hidden) { $("#pack-import-form").hidden = true; $("#pack-add-title").focus(); }
     });
     $("#pack-add-form").addEventListener("submit", (e) => {
       e.preventDefault();
       const title = $("#pack-add-title").value.trim();
       if (!title || openOwner === null) return;
-      Store.add("packing", { title, category: $("#pack-add-cat").value, owner: openOwner, done: false });
+      Store.add("packing", { title, category: $("#pack-add-cat").value, list: packList, owner: openOwner, done: false });
       $("#pack-add-title").value = "";
     });
 
+    // Import / paste-a-list
+    $("#pack-import-toggle").addEventListener("click", () => {
+      const form = $("#pack-import-form");
+      form.hidden = !form.hidden;
+      if (!form.hidden) { $("#pack-add-form").hidden = true; $("#pack-import-text").focus(); }
+      updateImportCount();
+    });
+    $("#pack-import-text").addEventListener("input", updateImportCount);
+    $("#pack-import-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (openOwner === null) return;
+      const items = parseListText($("#pack-import-text").value);
+      if (!items.length) { alert("No items found to import — paste a list first."); return; }
+      items.forEach((title) => Store.add("packing", { title, category: "Other", list: packList, owner: openOwner, done: false }));
+      $("#pack-import-text").value = "";
+      $("#pack-import-form").hidden = true;
+      updateImportCount();
+    });
+
     $("#pack-seed").addEventListener("click", () => {
-      if (!confirm("Add ~18 suggested resort essentials to both Kelli's and Nick's lists?")) return;
+      if (!confirm("Add ~18 suggested resort essentials to both Kelli's and Nick's Packing lists?")) return;
       PACK_OWNERS.forEach((owner) => {
-        PACK_SEED.forEach(([title, category]) => Store.add("packing", { title, category, owner, done: false }));
+        PACK_SEED.forEach(([title, category]) => Store.add("packing", { title, category, list: "packing", owner, done: false }));
       });
     });
 
@@ -354,11 +421,17 @@
     });
   }
 
+  function updateImportCount() {
+    const n = parseListText($("#pack-import-text").value).length;
+    $("#pack-import-count").textContent = n ? `${n} item${n === 1 ? "" : "s"} ready to add` : "";
+  }
+
   function renderPackGrid() {
+    const L = PACK_LABELS[packList];
     PACK_OWNERS.forEach((owner) => {
-      const rows = packItemsFor(owner);
+      const rows = packItemsFor(packList, owner);
       const done = rows.filter((r) => r.done).length;
-      $(`.pack-tile-sub[data-sub-for="${owner}"]`).textContent = rows.length ? `${done}/${rows.length} packed` : "Tap to add";
+      $(`.pack-tile-sub[data-sub-for="${owner}"]`).textContent = rows.length ? `${done}/${rows.length} ${L.verb}` : "Tap to add";
       const box = $(`.pack-tile-events[data-events-for="${owner}"]`);
       if (!rows.length) { box.innerHTML = `<span class="tile-empty">Nothing yet</span>`; return; }
       const todo = rows.filter((r) => !r.done);
@@ -366,15 +439,18 @@
       const rest = (todo.length ? todo.length : rows.length) - shown.length;
       box.innerHTML = shown.map((r) => `<span class="tile-chip">${r.done ? "✓ " : ""}${esc(r.title)}</span>`).join("")
         + (rest > 0 ? `<span class="tile-more">+${rest} more</span>` : "")
-        + (!todo.length && rows.length ? `<span class="tile-chip">🎉 All packed!</span>` : "");
+        + (!todo.length && rows.length ? `<span class="tile-chip">${L.allDone}</span>` : "");
     });
   }
 
   function openPackSheet(owner) {
     openOwner = owner;
-    $("#pack-sheet-title").textContent = `${owner}'s List`;
+    $("#pack-sheet-title").textContent = `${owner} · ${PACK_LABELS[packList].noun}`;
     $("#pack-add-form").hidden = true;
     $("#pack-add-title").value = "";
+    $("#pack-import-form").hidden = true;
+    $("#pack-import-text").value = "";
+    updateImportCount();
     renderPackSheetList();
     $("#pack-sheet").hidden = false;
   }
@@ -385,8 +461,8 @@
   function renderPackSheetList() {
     const list = $("#pack-sheet-list");
     list.innerHTML = "";
-    const rows = packItemsFor(openOwner);
-    if (!rows.length) { list.appendChild(emptyMsg("Nothing yet — tap ＋ to add the first item 🧳")); return; }
+    const rows = packItemsFor(packList, openOwner);
+    if (!rows.length) { list.appendChild(emptyMsg(`Nothing yet — tap ＋ to add, or 📋 paste a list ${PACK_LABELS[packList].icon}`)); return; }
     let lastCat = null;
     rows.forEach((r) => {
       const cat = r.category || "Other";
