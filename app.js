@@ -302,6 +302,7 @@
     ["Cash for tips (USD)", "Documents"],
   ];
   const PACK_OWNERS = ["Kelli", "Nick"];
+  const PACK_CATS = ["Beach", "Clothes", "Toiletries", "Documents", "Tech", "Other"];
   const PACK_TILE_PREVIEW_MAX = 5;
   const PACK_IMPORT_MAX = 200;
   const PACK_LABELS = {
@@ -350,6 +351,9 @@
   }
 
   function initPacking() {
+    // keep the add-form category options in sync with PACK_CATS
+    $("#pack-add-cat").innerHTML = PACK_CATS.map((c) => `<option>${c}</option>`).join("");
+
     const grid = $("#pack-grid");
     PACK_OWNERS.forEach((owner) => {
       const tile = document.createElement("button");
@@ -406,6 +410,8 @@
       $("#pack-import-form").hidden = true;
       updateImportCount();
     });
+
+    $("#pack-copy-btn").addEventListener("click", copyCurrentList);
 
     $("#pack-seed").addEventListener("click", () => {
       if (!confirm("Add ~18 suggested resort essentials to both Kelli's and Nick's Packing lists?")) return;
@@ -472,12 +478,65 @@
         list.appendChild(h);
         lastCat = cat;
       }
-      list.appendChild(checkRow({
-        title: r.title, done: r.done, meta: "",
-        onToggle: () => Store.update("packing", r.id, { done: !r.done }),
-        onDelete: () => Store.remove("packing", r.id),
-      }));
+      list.appendChild(packRow(r));
     });
+  }
+
+  // A list row with an inline category changer.
+  function packRow(r) {
+    const el = document.createElement("div");
+    el.className = "item" + (r.done ? " done" : "");
+    const cat = r.category || "Other";
+    const opts = PACK_CATS.map((c) => `<option ${c === cat ? "selected" : ""}>${c}</option>`).join("");
+    el.innerHTML = `
+      <button class="item-check" aria-label="toggle">✓</button>
+      <div class="item-body">
+        <div class="item-title">${esc(r.title)}</div>
+        <select class="item-cat" aria-label="Category">${opts}</select>
+      </div>
+      <button class="item-del" aria-label="delete">🗑️</button>`;
+    el.querySelector(".item-check").addEventListener("click", () => Store.update("packing", r.id, { done: !r.done }));
+    el.querySelector(".item-del").addEventListener("click", () => Store.remove("packing", r.id));
+    el.querySelector(".item-cat").addEventListener("change", (e) => Store.update("packing", r.id, { category: e.target.value }));
+    return el;
+  }
+
+  // Build a plain-text version of the open list and copy it to the clipboard.
+  function copyCurrentList() {
+    if (openOwner === null) return;
+    const rows = packItemsFor(packList, openOwner);
+    if (!rows.length) { alert("This list is empty."); return; }
+    const lines = [`${openOwner} · ${PACK_LABELS[packList].noun}`];
+    let lastCat = null;
+    rows.forEach((r) => {
+      const cat = r.category || "Other";
+      if (cat !== lastCat) { lines.push("", cat + ":"); lastCat = cat; }
+      lines.push(`- ${r.done ? "[x] " : ""}${r.title}`);
+    });
+    const text = lines.join("\n");
+    copyText(text).then((ok) => {
+      const btn = $("#pack-copy-btn");
+      const orig = btn.textContent;
+      btn.textContent = ok ? "✓ Copied!" : "Copied below";
+      setTimeout(() => { btn.textContent = orig; }, 1600);
+      if (!ok) window.prompt("Copy your list:", text);
+    });
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text));
+    }
+    return Promise.resolve(fallbackCopy(text));
+  }
+  function fallbackCopy(text) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch { return false; }
   }
 
   // -------------------------------------------------------------- NOTES
