@@ -156,10 +156,81 @@
     d.className = "empty"; d.textContent = text; return d;
   }
 
+  // -------------------------------------------------------------- CATEGORIES (custom, synced)
+  // Base sets; users can add their own, stored in settings (packCats / planTypes)
+  // and shared across both phones.
+  const PACK_BASE_CATS = ["Beach", "Clothes", "Toiletries", "Documents", "Tech"]; // "Other" always appended last
+  const PLAN_BASE_TYPES = [
+    { value: "excursion", emoji: "🤿", label: "Excursion" },
+    { value: "dining", emoji: "🍽️", label: "Dining" },
+    { value: "idea", emoji: "💡", label: "Idea" },
+  ];
+  const NEW_CAT_SENTINEL = "__new__";
+  let customPackCats = [];
+  let customPlanTypes = [];
+  let pendingPackCat = null;   // reselect after a new pack category syncs in
+  let pendingPlanType = null;  // reselect after a new plan category syncs in
+
+  function effectivePackCats() {
+    const out = [];
+    [...PACK_BASE_CATS, ...customPackCats].forEach((c) => {
+      if (c && c !== "Other" && !out.some((x) => x.toLowerCase() === c.toLowerCase())) out.push(c);
+    });
+    out.push("Other");
+    return out;
+  }
+  function effectivePlanTypes() {
+    const out = PLAN_BASE_TYPES.slice();
+    customPlanTypes.forEach((name) => {
+      if (name && !out.some((t) => t.value.toLowerCase() === name.toLowerCase())) {
+        out.push({ value: name, emoji: "🏷️", label: name, custom: true });
+      }
+    });
+    return out;
+  }
+  function typeMeta(type) {
+    const t = effectivePlanTypes().find((x) => x.value === type);
+    return t ? [t.emoji, t.label] : ["🏷️", type];
+  }
+  // Fill a <select> from string values, DOM-safe, with a trailing "＋ New category…" option.
+  function fillCatSelect(sel, values, selected) {
+    sel.innerHTML = "";
+    values.forEach((v) => {
+      const o = document.createElement("option");
+      o.value = (typeof v === "object" ? v.value : v);
+      o.textContent = (typeof v === "object" ? `${v.emoji} ${v.label}` : v);
+      if (o.value === selected) o.selected = true;
+      sel.appendChild(o);
+    });
+    const o = document.createElement("option");
+    o.value = NEW_CAT_SENTINEL; o.textContent = "＋ New category…";
+    sel.appendChild(o);
+  }
+  function promptCategory(existingNames) {
+    let name = window.prompt("New category name:");
+    if (name == null) return null;
+    name = name.trim().slice(0, 30);
+    if (!name || name === NEW_CAT_SENTINEL) return null;
+    if (name.toLowerCase() === "other" || existingNames.some((c) => c.toLowerCase() === name.toLowerCase())) {
+      alert("“" + name + "” already exists.");
+      return null;
+    }
+    return name;
+  }
+  function initCategories() {
+    Store.subscribeSettings((s) => {
+      customPackCats = Array.isArray(s.packCats) ? s.packCats : [];
+      customPlanTypes = Array.isArray(s.planTypes) ? s.planTypes : [];
+      rebuildPackCatUI();
+      rebuildPlannerTypeUI();
+      renderPackGrid();
+      if (openOwner !== null) renderPackSheetList();
+      renderCalGrid();
+      if (openDay !== null) renderDaySheetList();
+    });
+  }
+
   // -------------------------------------------------------------- PLANNER
-  const TYPE_META = {
-    excursion: ["🤿", "Excursion"], dining: ["🍽️", "Dining"], idea: ["💡", "Idea"],
-  };
   const TILE_PREVIEW_MAX = 5;
   let planFilter = "all";
   let currentPlans = [];
@@ -183,21 +254,42 @@
     return rows.sort(sortByTime);
   }
 
-  function initPlanner() {
-    // type filter chips
-    const filters = [["all", "All"], ["excursion", "🤿"], ["dining", "🍽️"], ["idea", "💡"]];
+  function rebuildPlanFilters() {
     const fr = $("#plan-filters");
-    filters.forEach(([val, label]) => {
+    fr.innerHTML = "";
+    const chips = [{ value: "all", label: "All" },
+      ...effectivePlanTypes().map((t) => ({ value: t.value, label: t.custom ? `🏷️ ${t.label}` : t.emoji }))];
+    chips.forEach(({ value, label }) => {
       const b = document.createElement("button");
-      b.className = "chip" + (val === "all" ? " active" : "");
-      b.textContent = label; b.dataset.f = val;
+      b.className = "chip" + (planFilter === value ? " active" : "");
+      b.textContent = label; b.dataset.f = value;
       b.addEventListener("click", () => {
-        planFilter = val;
-        $$(".chip", fr).forEach((c) => c.classList.toggle("active", c.dataset.f === val));
+        planFilter = value;
+        $$(".chip", fr).forEach((c) => c.classList.toggle("active", c.dataset.f === value));
         renderCalGrid();
         if (openDay !== null) renderDaySheetList();
       });
       fr.appendChild(b);
+    });
+  }
+  function rebuildPlannerTypeUI() {
+    const sel = $("#day-add-type");
+    if (sel) {
+      const cur = sel.value && sel.value !== NEW_CAT_SENTINEL ? sel.value : "";
+      fillCatSelect(sel, effectivePlanTypes(),
+        (pendingPlanType && effectivePlanTypes().some((t) => t.value === pendingPlanType)) ? pendingPlanType : cur);
+      if (pendingPlanType) pendingPlanType = null;
+    }
+    rebuildPlanFilters();
+  }
+
+  function initPlanner() {
+    rebuildPlannerTypeUI();
+    $("#day-add-type").addEventListener("change", (e) => {
+      if (e.target.value !== NEW_CAT_SENTINEL) return;
+      const name = promptCategory(effectivePlanTypes().map((t) => t.label));
+      if (name) { pendingPlanType = name; Store.setSetting("planTypes", [...customPlanTypes, name]); }
+      else rebuildPlannerTypeUI();
     });
 
     // calendar squares — one per trip day
@@ -254,7 +346,7 @@
       const shown = rows.slice(0, TILE_PREVIEW_MAX);
       const rest = rows.length - shown.length;
       box.innerHTML = shown.map((r) => {
-        const [emoji] = TYPE_META[r.type] || ["•"];
+        const [emoji] = typeMeta(r.type);
         const t = r.time ? fmtTime(r.time) + " · " : "";
         return `<span class="tile-chip">${emoji} ${t}${esc(r.title)}</span>`;
       }).join("") + (rest > 0 ? `<span class="tile-more">+${rest} more</span>` : "");
@@ -280,8 +372,8 @@
     const rows = itemsFor(openDay);
     if (!rows.length) { list.appendChild(emptyMsg("Nothing yet — tap ＋ to add the first plan 🗺️")); return; }
     rows.forEach((r) => {
-      const [emoji, tname] = TYPE_META[r.type] || ["•", r.type];
-      const meta = (r.time ? `<span class="tag">🕐 ${fmtTime(r.time)}</span>` : "") + `<span class="tag">${emoji} ${tname}</span>`;
+      const [emoji, tname] = typeMeta(r.type);
+      const meta = (r.time ? `<span class="tag">🕐 ${fmtTime(r.time)}</span>` : "") + `<span class="tag">${esc(emoji)} ${esc(tname)}</span>`;
       list.appendChild(checkRow({
         title: r.title, done: r.done, meta,
         onToggle: () => Store.update("plans", r.id, { done: !r.done }),
@@ -302,7 +394,6 @@
     ["Cash for tips (USD)", "Documents"],
   ];
   const PACK_OWNERS = ["Kelli", "Nick"];
-  const PACK_CATS = ["Beach", "Clothes", "Toiletries", "Documents", "Tech", "Other"];
   const PACK_TILE_PREVIEW_MAX = 5;
   const PACK_IMPORT_MAX = 200;
   const PACK_LABELS = {
@@ -351,8 +442,13 @@
   }
 
   function initPacking() {
-    // keep the add-form category options in sync with PACK_CATS
-    $("#pack-add-cat").innerHTML = PACK_CATS.map((c) => `<option>${c}</option>`).join("");
+    rebuildPackCatUI();
+    $("#pack-add-cat").addEventListener("change", (e) => {
+      if (e.target.value !== NEW_CAT_SENTINEL) return;
+      const name = promptCategory(effectivePackCats());
+      if (name) { pendingPackCat = name; Store.setSetting("packCats", [...customPackCats, name]); }
+      else rebuildPackCatUI();
+    });
 
     const grid = $("#pack-grid");
     PACK_OWNERS.forEach((owner) => {
@@ -482,22 +578,46 @@
     });
   }
 
+  function rebuildPackCatUI() {
+    const sel = $("#pack-add-cat");
+    if (!sel) return;
+    const cur = sel.value && sel.value !== NEW_CAT_SENTINEL ? sel.value : "";
+    fillCatSelect(sel, effectivePackCats(),
+      (pendingPackCat && effectivePackCats().includes(pendingPackCat)) ? pendingPackCat : cur);
+    if (pendingPackCat) pendingPackCat = null;
+  }
+
   // A list row with an inline category changer.
   function packRow(r) {
     const el = document.createElement("div");
     el.className = "item" + (r.done ? " done" : "");
     const cat = r.category || "Other";
-    const opts = PACK_CATS.map((c) => `<option ${c === cat ? "selected" : ""}>${c}</option>`).join("");
+    // ensure the item's own category is selectable even if it was later removed from the list
+    const values = effectivePackCats().slice();
+    if (!values.some((c) => c.toLowerCase() === cat.toLowerCase())) values.unshift(cat);
     el.innerHTML = `
       <button class="item-check" aria-label="toggle">✓</button>
       <div class="item-body">
         <div class="item-title">${esc(r.title)}</div>
-        <select class="item-cat" aria-label="Category">${opts}</select>
       </div>
       <button class="item-del" aria-label="delete">🗑️</button>`;
+    const body = el.querySelector(".item-body");
+    const sel = document.createElement("select");
+    sel.className = "item-cat"; sel.setAttribute("aria-label", "Category");
+    fillCatSelect(sel, values, cat);
+    body.appendChild(sel);
     el.querySelector(".item-check").addEventListener("click", () => Store.update("packing", r.id, { done: !r.done }));
     el.querySelector(".item-del").addEventListener("click", () => Store.remove("packing", r.id));
-    el.querySelector(".item-cat").addEventListener("change", (e) => Store.update("packing", r.id, { category: e.target.value }));
+    sel.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (val === NEW_CAT_SENTINEL) {
+        const name = promptCategory(effectivePackCats());
+        if (name) { Store.setSetting("packCats", [...customPackCats, name]); Store.update("packing", r.id, { category: name }); }
+        else renderPackSheetList();
+      } else {
+        Store.update("packing", r.id, { category: val });
+      }
+    });
     return el;
   }
 
@@ -742,6 +862,7 @@
     initSettings();
     initPlanner();
     initPacking();
+    initCategories();
     initNotes();
     initPhotos();
     initHomePhotos();
