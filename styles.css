@@ -107,17 +107,21 @@ body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71
 
 /* ---------- Cards / lists ---------- */
 .card-list{display:flex;flex-direction:column;gap:10px}
-.item{display:flex;align-items:flex-start;gap:12px;background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.item{position:relative;border:1px solid var(--card-border);border-radius:16px;overflow:hidden;touch-action:pan-y}
 .item.done{opacity:.55}
 .item.done .item-title{text-decoration:line-through}
+/* Sliding foreground (holds the card look) */
+.item-inner{display:flex;align-items:flex-start;gap:12px;background:#12626d;padding:14px;will-change:transform}
+/* Red delete backdrop revealed on swipe */
+.item-del-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;
+  padding-right:22px;background:linear-gradient(90deg,#c0392b,#e74c3c);color:#fff;font-weight:800;font-size:15px}
+.item.armed .item-del-bg{background:linear-gradient(90deg,#e74c3c,#ff6b6b)}
 .item-check{flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:2px solid var(--turq-bright);background:transparent;cursor:pointer;display:grid;place-items:center;font-size:15px;color:transparent}
 .item.done .item-check{background:var(--turq);color:var(--ink)}
 .item-body{flex:1;min-width:0}
 .item-title{font-weight:600;font-size:16px;word-break:break-word}
 .item-meta{margin-top:3px;font-size:12px;color:rgba(255,255,255,.7);display:flex;gap:8px;flex-wrap:wrap}
 .tag{background:rgba(255,255,255,.16);border-radius:6px;padding:2px 7px}
-.item-del{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.55);font-size:18px;cursor:pointer;padding:2px 4px}
-.item-del:active{color:var(--coral)}
 
 .day-group{margin:6px 0 2px}
 .day-heading{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:16px 4px 8px}

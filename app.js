@@ -228,26 +228,75 @@
     ids.forEach((id, i) => Store.update(coll, id, { order: i }));
   }
 
+  // Swipe a row left past a threshold to delete it. Ignores interactive controls
+  // and cooperates with vertical scroll (touch-action: pan-y on .item).
+  function enableSwipeDelete(itemEl, onDelete) {
+    const inner = itemEl.querySelector(".item-inner");
+    if (!inner) return;
+    const THRESH = 90;
+    const NOSWIPE = ".item-drag,.item-check,.item-editbtn,.item-cat,input,select,textarea";
+    let startX = 0, startY = 0, dx = 0, dir = null, active = false, pid = null;
+
+    itemEl.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(NOSWIPE)) return;
+      active = true; dir = null; dx = 0; startX = e.clientX; startY = e.clientY; pid = e.pointerId;
+      inner.style.transition = "none";
+    });
+    itemEl.addEventListener("pointermove", (e) => {
+      if (!active) return;
+      const ddx = e.clientX - startX, ddy = e.clientY - startY;
+      if (dir === null) {
+        if (Math.abs(ddx) > 8 || Math.abs(ddy) > 8) {
+          dir = Math.abs(ddx) > Math.abs(ddy) ? "h" : "v";
+          if (dir === "h") { try { itemEl.setPointerCapture(pid); } catch {} }
+          else { active = false; return; } // vertical → let it scroll
+        } else return;
+      }
+      e.preventDefault();
+      dx = Math.min(0, ddx);
+      inner.style.transform = `translateX(${dx}px)`;
+      itemEl.classList.toggle("armed", dx <= -THRESH);
+    });
+    const finish = () => {
+      if (!active) return;
+      active = false;
+      inner.style.transition = "transform .18s ease";
+      if (dx <= -THRESH) {
+        inner.style.transform = "translateX(-100%)";
+        itemEl.style.opacity = "0";
+        setTimeout(() => onDelete && onDelete(), 170);
+      } else {
+        inner.style.transform = "translateX(0)";
+        itemEl.classList.remove("armed");
+      }
+      dx = 0; dir = null;
+    };
+    itemEl.addEventListener("pointerup", finish);
+    itemEl.addEventListener("pointercancel", finish);
+  }
+
   function checkRow({ item, done, title, meta, onToggle, onDelete, onEdit, reRender, id, group, draggable }) {
     const el = document.createElement("div");
     el.className = "item" + (done ? " done" : "");
     if (id != null) el.dataset.id = id;
     if (group != null) el.dataset.group = group;
     el.innerHTML = `
-      <button class="item-check" aria-label="toggle">✓</button>
-      <div class="item-body">
-        <div class="item-title">${esc(title)}</div>
-        <div class="item-meta">${meta || ""}</div>
-      </div>
-      ${onEdit ? `<button class="item-editbtn" aria-label="edit">✏️</button>` : ""}
-      <button class="item-del" aria-label="delete">🗑️</button>
-      ${draggable ? `<button class="item-drag" aria-label="reorder">⠿</button>` : ""}`;
+      <div class="item-del-bg" aria-hidden="true">🗑️ Delete</div>
+      <div class="item-inner">
+        <button class="item-check" aria-label="toggle">✓</button>
+        <div class="item-body">
+          <div class="item-title">${esc(title)}</div>
+          <div class="item-meta">${meta || ""}</div>
+        </div>
+        ${onEdit ? `<button class="item-editbtn" aria-label="edit">✏️</button>` : ""}
+        ${draggable ? `<button class="item-drag" aria-label="reorder">⠿</button>` : ""}
+      </div>`;
     el.querySelector(".item-check").addEventListener("click", onToggle);
-    el.querySelector(".item-del").addEventListener("click", onDelete);
     if (onEdit) {
       el.querySelector(".item-editbtn").addEventListener("click", () =>
         beginInlineEdit(el.querySelector(".item-title"), title, onEdit, reRender || (() => {})));
     }
+    enableSwipeDelete(el, onDelete);
     return el;
   }
   function emptyMsg(text) {
@@ -772,20 +821,22 @@
     const values = effectivePackCats().slice();
     if (!values.some((c) => c.toLowerCase() === cat.toLowerCase())) values.unshift(cat);
     el.innerHTML = `
-      <button class="item-check" aria-label="toggle">✓</button>
-      <div class="item-body">
-        <div class="item-title">${esc(r.title)}</div>
-      </div>
-      <button class="item-editbtn" aria-label="edit">✏️</button>
-      <button class="item-del" aria-label="delete">🗑️</button>
-      <button class="item-drag" aria-label="reorder">⠿</button>`;
+      <div class="item-del-bg" aria-hidden="true">🗑️ Delete</div>
+      <div class="item-inner">
+        <button class="item-check" aria-label="toggle">✓</button>
+        <div class="item-body">
+          <div class="item-title">${esc(r.title)}</div>
+        </div>
+        <button class="item-editbtn" aria-label="edit">✏️</button>
+        <button class="item-drag" aria-label="reorder">⠿</button>
+      </div>`;
     const body = el.querySelector(".item-body");
     const sel = document.createElement("select");
     sel.className = "item-cat"; sel.setAttribute("aria-label", "Category");
     fillCatSelect(sel, values, cat);
     body.appendChild(sel);
     el.querySelector(".item-check").addEventListener("click", () => Store.update("packing", r.id, { done: !r.done }));
-    el.querySelector(".item-del").addEventListener("click", () => Store.remove("packing", r.id));
+    enableSwipeDelete(el, () => Store.remove("packing", r.id));
     el.querySelector(".item-editbtn").addEventListener("click", () =>
       beginInlineEdit(el.querySelector(".item-title"), r.title,
         (val) => Store.update("packing", r.id, { title: val }), renderPackSheetList));
