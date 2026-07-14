@@ -77,14 +77,18 @@
     $("#progress-fill").style.width = pct.toFixed(1) + "%";
 
     const ms = $("#milestone");
+    const bd = $("#cd-breakdown");
     if (onTrip) {
       $("#progress-text").textContent = "You're in Barbados right now 🌴 Soak it up!";
       $("#progress-fill").style.width = "100%";
       ms.textContent = "Living the dream — enjoy every second 🥂";
+      if (bd) bd.textContent = "";
     } else if (done) {
       $("#progress-text").textContent = "What a trip. Already planning the next one? 💕";
       ms.textContent = "";
+      if (bd) bd.textContent = "";
     } else {
+      if (bd) bd.textContent = formatBreakdown(breakdownUntil(start));
       $("#progress-text").textContent = `${days} days, ${hrs}h ${mins}m until check-in`;
       // milestone banner (closest upcoming threshold that we're at/under)
       const hit = MILESTONES.find((m) => days === m.d);
@@ -96,6 +100,29 @@
         ms.textContent = "";
       }
     }
+  }
+
+  // Calendar-aware "X months, Y weeks, Z days" until a timestamp.
+  function breakdownUntil(startMs) {
+    const now = new Date();
+    const start = new Date(startMs);
+    if (start <= now) return null;
+    let months = (start.getFullYear() - now.getFullYear()) * 12 + (start.getMonth() - now.getMonth());
+    let anchor = new Date(now); anchor.setMonth(anchor.getMonth() + months);
+    if (anchor > start) { months--; anchor = new Date(now); anchor.setMonth(anchor.getMonth() + months); }
+    if (months < 0) months = 0;
+    let remDays = Math.floor((start - anchor) / 86400000);
+    const weeks = Math.floor(remDays / 7);
+    const days = remDays % 7;
+    return { months, weeks, days };
+  }
+  function formatBreakdown(bd) {
+    if (!bd) return "";
+    const parts = [];
+    const push = (n, unit) => { if (n > 0) parts.push(`${n} ${unit}${n === 1 ? "" : "s"}`); };
+    push(bd.months, "month"); push(bd.weeks, "week"); push(bd.days, "day");
+    if (!parts.length) return "Check-in is today! 🎉";
+    return parts.join(", ") + " to go";
   }
 
   // -------------------------------------------------------------- confetti
@@ -137,7 +164,27 @@
     const d = new Date(iso + "T12:00:00");
     return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
   }
-  function checkRow({ item, done, title, meta, onToggle, onDelete }) {
+  // Turn a title element into an inline text input; onSave(newText) or re-render on cancel.
+  function beginInlineEdit(titleEl, current, onSave, reRender) {
+    const input = document.createElement("input");
+    input.type = "text"; input.className = "item-edit"; input.value = current; input.maxLength = 120;
+    titleEl.replaceWith(input);
+    input.focus(); input.select();
+    let settled = false;
+    const finish = (save) => {
+      if (settled) return; settled = true;
+      const val = input.value.trim();
+      if (save && val && val !== current) onSave(val);
+      else reRender();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  function checkRow({ item, done, title, meta, onToggle, onDelete, onEdit, reRender }) {
     const el = document.createElement("div");
     el.className = "item" + (done ? " done" : "");
     el.innerHTML = `
@@ -146,9 +193,14 @@
         <div class="item-title">${esc(title)}</div>
         <div class="item-meta">${meta || ""}</div>
       </div>
+      ${onEdit ? `<button class="item-editbtn" aria-label="edit">✏️</button>` : ""}
       <button class="item-del" aria-label="delete">🗑️</button>`;
     el.querySelector(".item-check").addEventListener("click", onToggle);
     el.querySelector(".item-del").addEventListener("click", onDelete);
+    if (onEdit) {
+      el.querySelector(".item-editbtn").addEventListener("click", () =>
+        beginInlineEdit(el.querySelector(".item-title"), title, onEdit, reRender || (() => {})));
+    }
     return el;
   }
   function emptyMsg(text) {
@@ -206,8 +258,8 @@
     o.value = NEW_CAT_SENTINEL; o.textContent = "＋ New category…";
     sel.appendChild(o);
   }
-  function promptCategory(existingNames) {
-    let name = window.prompt("New category name:");
+  function promptCategory(existingNames, message, def) {
+    let name = window.prompt(message || "New category name:", def || "");
     if (name == null) return null;
     name = name.trim().slice(0, 30);
     if (!name || name === NEW_CAT_SENTINEL) return null;
@@ -223,11 +275,73 @@
       customPlanTypes = Array.isArray(s.planTypes) ? s.planTypes : [];
       rebuildPackCatUI();
       rebuildPlannerTypeUI();
+      renderCategoryManagers();
       renderPackGrid();
       if (openOwner !== null) renderPackSheetList();
       renderCalGrid();
       if (openDay !== null) renderDaySheetList();
     });
+  }
+
+  // ---- Category management (Settings tab) ----
+  function catRow(display, rawName, editable, kind) {
+    const row = document.createElement("div");
+    row.className = "cat-row";
+    const span = document.createElement("span");
+    span.className = "cat-name"; span.textContent = display;
+    row.appendChild(span);
+    if (!editable) {
+      const tag = document.createElement("span");
+      tag.className = "cat-base"; tag.textContent = "built-in";
+      row.appendChild(tag);
+      return row;
+    }
+    const rn = document.createElement("button"); rn.textContent = "✏️"; rn.setAttribute("aria-label", "rename");
+    const dl = document.createElement("button"); dl.textContent = "🗑️"; dl.setAttribute("aria-label", "delete");
+    rn.addEventListener("click", () => (kind === "pack" ? renamePackCat(rawName) : renamePlanType(rawName)));
+    dl.addEventListener("click", () => (kind === "pack" ? deletePackCat(rawName) : deletePlanType(rawName)));
+    row.appendChild(rn); row.appendChild(dl);
+    return row;
+  }
+  function renderCategoryManagers() {
+    const packEl = $("#cat-pack-list");
+    if (packEl) {
+      packEl.innerHTML = "";
+      [...PACK_BASE_CATS, "Other"].forEach((n) => packEl.appendChild(catRow(n, n, false, "pack")));
+      customPackCats.forEach((n) => packEl.appendChild(catRow(n, n, true, "pack")));
+    }
+    const planEl = $("#cat-plan-list");
+    if (planEl) {
+      planEl.innerHTML = "";
+      PLAN_BASE_TYPES.forEach((t) => planEl.appendChild(catRow(`${t.emoji} ${t.label}`, t.value, false, "plan")));
+      customPlanTypes.forEach((n) => planEl.appendChild(catRow(`🏷️ ${n}`, n, true, "plan")));
+    }
+  }
+  function renamePackCat(oldName) {
+    const others = effectivePackCats().filter((c) => c.toLowerCase() !== oldName.toLowerCase());
+    const name = promptCategory(others, `Rename “${oldName}” to:`, oldName);
+    if (!name) return;
+    Store.setSetting("packCats", customPackCats.map((c) => (c === oldName ? name : c)));
+    currentPacking.filter((r) => (r.category || "") === oldName).forEach((r) => Store.update("packing", r.id, { category: name }));
+  }
+  function deletePackCat(name) {
+    const n = currentPacking.filter((r) => (r.category || "") === name).length;
+    if (!confirm(`Delete category “${name}”?` + (n ? ` ${n} item${n === 1 ? "" : "s"} will move to “Other”.` : ""))) return;
+    Store.setSetting("packCats", customPackCats.filter((c) => c !== name));
+    currentPacking.filter((r) => (r.category || "") === name).forEach((r) => Store.update("packing", r.id, { category: "Other" }));
+  }
+  function renamePlanType(oldName) {
+    const others = effectivePlanTypes().map((t) => t.label).filter((c) => c.toLowerCase() !== oldName.toLowerCase());
+    const name = promptCategory(others, `Rename “${oldName}” to:`, oldName);
+    if (!name) return;
+    Store.setSetting("planTypes", customPlanTypes.map((c) => (c === oldName ? name : c)));
+    currentPlans.filter((r) => r.type === oldName).forEach((r) => Store.update("plans", r.id, { type: name }));
+  }
+  function deletePlanType(name) {
+    const n = currentPlans.filter((r) => r.type === name).length;
+    if (!confirm(`Delete category “${name}”?` + (n ? ` ${n} plan${n === 1 ? "" : "s"} will move to “Idea”.` : ""))) return;
+    Store.setSetting("planTypes", customPlanTypes.filter((c) => c !== name));
+    currentPlans.filter((r) => r.type === name).forEach((r) => Store.update("plans", r.id, { type: "idea" }));
   }
 
   // -------------------------------------------------------------- PLANNER
@@ -378,6 +492,8 @@
         title: r.title, done: r.done, meta,
         onToggle: () => Store.update("plans", r.id, { done: !r.done }),
         onDelete: () => Store.remove("plans", r.id),
+        onEdit: (val) => Store.update("plans", r.id, { title: val }),
+        reRender: renderDaySheetList,
       }));
     });
   }
@@ -600,6 +716,7 @@
       <div class="item-body">
         <div class="item-title">${esc(r.title)}</div>
       </div>
+      <button class="item-editbtn" aria-label="edit">✏️</button>
       <button class="item-del" aria-label="delete">🗑️</button>`;
     const body = el.querySelector(".item-body");
     const sel = document.createElement("select");
@@ -608,6 +725,9 @@
     body.appendChild(sel);
     el.querySelector(".item-check").addEventListener("click", () => Store.update("packing", r.id, { done: !r.done }));
     el.querySelector(".item-del").addEventListener("click", () => Store.remove("packing", r.id));
+    el.querySelector(".item-editbtn").addEventListener("click", () =>
+      beginInlineEdit(el.querySelector(".item-title"), r.title,
+        (val) => Store.update("packing", r.id, { title: val }), renderPackSheetList));
     sel.addEventListener("change", (e) => {
       const val = e.target.value;
       if (val === NEW_CAT_SENTINEL) {
