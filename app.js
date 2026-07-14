@@ -184,9 +184,55 @@
     input.addEventListener("blur", () => finish(true));
   }
 
-  function checkRow({ item, done, title, meta, onToggle, onDelete, onEdit, reRender }) {
+  // Pointer-based drag-to-reorder within a list, constrained to rows sharing
+  // the same data-group. Calls onDrop(groupKey, orderedIds) when a drag ends.
+  function makeReorderable(listEl, onDrop) {
+    let dragEl = null, group = null, pid = null;
+    const rowsInGroup = () => $$(".item", listEl).filter((x) => x.dataset.group === group);
+
+    listEl.addEventListener("pointerdown", (e) => {
+      const handle = e.target.closest(".item-drag");
+      if (!handle) return;
+      const row = handle.closest(".item");
+      if (!row) return;
+      e.preventDefault();
+      dragEl = row; group = row.dataset.group; pid = e.pointerId;
+      try { row.setPointerCapture(pid); } catch {}
+      row.classList.add("dragging");
+    });
+
+    listEl.addEventListener("pointermove", (e) => {
+      if (!dragEl) return;
+      e.preventDefault();
+      const sibs = rowsInGroup().filter((x) => x !== dragEl);
+      let placed = false;
+      for (const sib of sibs) {
+        const r = sib.getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) { sib.before(dragEl); placed = true; break; }
+      }
+      if (!placed && sibs.length) sibs[sibs.length - 1].after(dragEl);
+    });
+
+    const end = () => {
+      if (!dragEl) return;
+      dragEl.classList.remove("dragging");
+      const ids = rowsInGroup().map((x) => x.dataset.id);
+      const g = group;
+      dragEl = null; group = null; pid = null;
+      onDrop(g, ids);
+    };
+    listEl.addEventListener("pointerup", end);
+    listEl.addEventListener("pointercancel", end);
+  }
+  function persistOrder(coll, ids) {
+    ids.forEach((id, i) => Store.update(coll, id, { order: i }));
+  }
+
+  function checkRow({ item, done, title, meta, onToggle, onDelete, onEdit, reRender, id, group, draggable }) {
     const el = document.createElement("div");
     el.className = "item" + (done ? " done" : "");
+    if (id != null) el.dataset.id = id;
+    if (group != null) el.dataset.group = group;
     el.innerHTML = `
       <button class="item-check" aria-label="toggle">✓</button>
       <div class="item-body">
@@ -194,7 +240,8 @@
         <div class="item-meta">${meta || ""}</div>
       </div>
       ${onEdit ? `<button class="item-editbtn" aria-label="edit">✏️</button>` : ""}
-      <button class="item-del" aria-label="delete">🗑️</button>`;
+      <button class="item-del" aria-label="delete">🗑️</button>
+      ${draggable ? `<button class="item-drag" aria-label="reorder">⠿</button>` : ""}`;
     el.querySelector(".item-check").addEventListener("click", onToggle);
     el.querySelector(".item-del").addEventListener("click", onDelete);
     if (onEdit) {
@@ -357,9 +404,13 @@
     return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
   function sortByTime(a, b) {
-    if (a.done !== b.done) return a.done - b.done;
-    const ta = a.time || "99:99", tb = b.time || "99:99";
-    if (ta !== tb) return ta < tb ? -1 : 1;
+    const ta = a.time || "", tb = b.time || "";
+    if (ta && tb && ta !== tb) return ta < tb ? -1 : 1; // both timed → chronological
+    if (ta && !tb) return -1;                            // timed before untimed
+    if (!ta && tb) return 1;
+    // same time, or both untimed → manual order, then creation
+    const oa = a.order ?? Number.MAX_SAFE_INTEGER, ob = b.order ?? Number.MAX_SAFE_INTEGER;
+    if (oa !== ob) return oa - ob;
     return a.createdAt - b.createdAt;
   }
   function itemsFor(day) {
@@ -444,6 +495,8 @@
       $("#day-add-time").value = "";
     });
 
+    makeReorderable($("#day-sheet-list"), (g, ids) => persistOrder("plans", ids));
+
     Store.subscribe("plans", (rows) => {
       currentPlans = rows;
       renderCalGrid();
@@ -494,6 +547,7 @@
         onDelete: () => Store.remove("plans", r.id),
         onEdit: (val) => Store.update("plans", r.id, { title: val }),
         reRender: renderDaySheetList,
+        id: r.id, group: r.time ? null : "untimed", draggable: !r.time, // timed plans stay locked to their time
       }));
     });
   }
@@ -523,8 +577,11 @@
   // Existing items (pre-shopping-split) have no `list`; treat them as packing.
   function itemList(r) { return r.list || "packing"; }
   function packItemsFor(list, owner) {
+    // group by category (alphabetical), then manual order within a category, then creation
     return currentPacking.filter((r) => itemList(r) === list && r.owner === owner)
-      .sort((a, b) => (a.done - b.done) || (a.category || "").localeCompare(b.category || "") || (a.createdAt - b.createdAt));
+      .sort((a, b) => (a.category || "Other").localeCompare(b.category || "Other")
+        || ((a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+        || (a.createdAt - b.createdAt));
   }
 
   // Parse pasted text (iPhone Notes etc.) into clean individual items.
@@ -632,6 +689,8 @@
       });
     });
 
+    makeReorderable($("#pack-sheet-list"), (g, ids) => persistOrder("packing", ids));
+
     Store.subscribe("packing", (rows) => {
       currentPacking = rows;
       renderPackGrid();
@@ -708,6 +767,7 @@
     const el = document.createElement("div");
     el.className = "item" + (r.done ? " done" : "");
     const cat = r.category || "Other";
+    el.dataset.id = r.id; el.dataset.group = cat;
     // ensure the item's own category is selectable even if it was later removed from the list
     const values = effectivePackCats().slice();
     if (!values.some((c) => c.toLowerCase() === cat.toLowerCase())) values.unshift(cat);
@@ -717,7 +777,8 @@
         <div class="item-title">${esc(r.title)}</div>
       </div>
       <button class="item-editbtn" aria-label="edit">✏️</button>
-      <button class="item-del" aria-label="delete">🗑️</button>`;
+      <button class="item-del" aria-label="delete">🗑️</button>
+      <button class="item-drag" aria-label="reorder">⠿</button>`;
     const body = el.querySelector(".item-body");
     const sel = document.createElement("select");
     sel.className = "item-cat"; sel.setAttribute("aria-label", "Category");

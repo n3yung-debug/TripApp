@@ -217,6 +217,12 @@ body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71
 .item-editbtn{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.55);font-size:16px;cursor:pointer;padding:2px 4px}
 .item-editbtn:active{color:var(--turq-bright)}
 
+/* Drag-to-reorder handle */
+.item-drag{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.4);font-size:20px;line-height:1;
+  cursor:grab;padding:2px 2px;touch-action:none;user-select:none;-webkit-user-select:none}
+.item-drag:active{cursor:grabbing;color:var(--turq-bright)}
+.item.dragging{opacity:.9;box-shadow:0 10px 26px rgba(0,0,0,.45);background:rgba(255,255,255,.22);position:relative;z-index:2}
+
 /* Category management (Settings) */
 .cat-subhead{margin:14px 0 6px;font-size:13px;color:rgba(255,255,255,.85)}
 .cat-manage-list{display:flex;flex-direction:column;gap:8px}
