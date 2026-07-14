@@ -107,7 +107,7 @@ body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71
 
 /* ---------- Cards / lists ---------- */
 .card-list{display:flex;flex-direction:column;gap:10px}
-.item{position:relative;border:1px solid var(--card-border);border-radius:16px;overflow:hidden;touch-action:pan-y}
+.item{position:relative;flex:0 0 auto;border:1px solid var(--card-border);border-radius:16px;overflow:hidden;touch-action:pan-y}
 .item.done{opacity:.55}
 .item.done .item-title{text-decoration:line-through}
 /* Sliding foreground (holds the card look) */
