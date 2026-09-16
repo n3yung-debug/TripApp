@@ -3,7 +3,7 @@
    Also computes local sunrise/sunset for the trip location.
    ============================================================================ */
 (function () {
-  const W = window.TRIPAPP_CONFIG && window.TRIPAPP_CONFIG.weather;
+  function cfgWeather() { return (window.TRIPAPP_CONFIG && window.TRIPAPP_CONFIG.weather) || null; }
 
   // WMO weather codes -> emoji + text
   const CODES = {
@@ -46,6 +46,7 @@
   const Weather = {};
 
   Weather.fetch = function () {
+    const W = cfgWeather();
     if (!W) return Promise.reject(new Error("No weather config"));
     const url = `https://api.open-meteo.com/v1/forecast`
       + `?latitude=${W.latitude}&longitude=${W.longitude}`
@@ -107,6 +108,28 @@
       today: days[0],
     };
   }
+
+  // Look up coordinates + timezone for a place name (Open-Meteo geocoding, free, no key).
+  // Resolves to { latitude, longitude, locationName, timezone } or rejects if not found.
+  Weather.geocode = function (name) {
+    const q = (name || "").trim();
+    if (!q) return Promise.reject(new Error("Enter a place name"));
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+    return fetch(url).then((r) => {
+      if (!r.ok) throw new Error("geocode http " + r.status);
+      return r.json();
+    }).then((data) => {
+      const hit = data && data.results && data.results[0];
+      if (!hit) throw new Error(`Couldn't find "${q}"`);
+      const parts = [hit.name, hit.admin1, hit.country].filter(Boolean);
+      return {
+        latitude: hit.latitude,
+        longitude: hit.longitude,
+        locationName: parts.join(", "),
+        timezone: hit.timezone || "auto",
+      };
+    });
+  };
 
   window.Weather = Weather;
 })();

@@ -176,6 +176,20 @@ body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71
 .rain-pct{color:rgba(255,255,255,.6)}
 .rain-none{font-size:13px;color:rgba(255,255,255,.75)}
 
+/* Trips management */
+.trips-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.trip-row{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.08);border:1px solid var(--card-border);border-radius:12px;padding:12px 14px;cursor:pointer}
+.trip-row.active{border-color:var(--turq-bright);background:rgba(46,196,182,.16)}
+.trip-row-main{flex:1;min-width:0}
+.trip-row-title{font-weight:800;font-size:15px}
+.trip-active-tag{font-size:11px;color:var(--turq-bright);font-weight:700;margin-left:4px}
+.trip-row-meta{font-size:12px;color:rgba(255,255,255,.7);margin-top:2px}
+.trip-row-edit{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.7);font-size:17px;cursor:pointer;padding:4px}
+.trip-geo-status{font-size:12px;color:var(--turq-bright);min-height:16px;margin:2px 0 8px}
+.trip-info-text{width:100%;background:rgba(255,255,255,.14);border:1px solid var(--card-border);border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;font-family:inherit;resize:vertical;line-height:1.4}
+.trip-info-text::placeholder{color:rgba(255,255,255,.5)}
+#trip-info-status{min-height:16px;color:var(--turq-bright)}
+
 .sync-status{font-size:14px}
 .sync-status.on{color:var(--turq-bright)}
 .sync-status.off{color:var(--gold)}

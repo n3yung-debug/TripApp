@@ -3,13 +3,51 @@
    ============================================================================ */
 (function () {
   const CFG = window.TRIPAPP_CONFIG || {};
-  const TRIP = CFG.trip || {};
+  let TRIP = {}; // populated from the active trip at boot (see applyActiveTrip)
+  let ALL_TRIPS = [];
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "1.1.0";
+
+  // ---- trips: derive days, seed from config, apply active ----
+  function deriveDays(startDate, endDate) {
+    const out = [];
+    try {
+      const s = new Date(startDate), e = new Date(endDate);
+      const d = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+      const last = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+      let guard = 0;
+      while (d <= last && guard++ < 60) {
+        out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+        d.setDate(d.getDate() + 1);
+      }
+    } catch { /* ignore */ }
+    return out;
+  }
+  function seedTripFromConfig() {
+    const t = CFG.trip || {};
+    return {
+      title: t.title || "My Trip",
+      person1: t.person1 || "Us", person2: t.person2 || "",
+      startDate: t.startDate || "", endDate: t.endDate || "",
+      days: t.days && t.days.length ? t.days : deriveDays(t.startDate, t.endDate),
+      weather: CFG.weather || null,
+      builtinInfo: "barbados", // the original trip carries the hand-written Barbados info cards
+    };
+  }
+  // Make a trip object the "active" one: fill TRIP, point weather + hero at it.
+  function applyActiveTrip(trip) {
+    TRIP = Object.assign({}, trip);
+    if (!TRIP.days || !TRIP.days.length) TRIP.days = deriveDays(TRIP.startDate, TRIP.endDate);
+    window.TRIPAPP_CONFIG = window.TRIPAPP_CONFIG || {};
+    window.TRIPAPP_CONFIG.weather = TRIP.weather || null;
+    const titleEl = $(".hero-title");
+    if (titleEl) titleEl.textContent = TRIP.title || "My Trip";
+  }
+
 
   // -------------------------------------------------------------- tabs
   function initTabs() {
@@ -79,7 +117,8 @@
     const ms = $("#milestone");
     const bd = $("#cd-breakdown");
     if (onTrip) {
-      $("#progress-text").textContent = "You're in Barbados right now 🌴 Soak it up!";
+      const place = (TRIP.builtinInfo === "barbados") ? "Barbados" : (TRIP.title || "your trip");
+      $("#progress-text").textContent = `You're in ${place} right now 🌴 Soak it up!`;
       $("#progress-fill").style.width = "100%";
       ms.textContent = "Living the dream — enjoy every second 🥂";
       if (bd) bd.textContent = "";
@@ -976,8 +1015,10 @@
   }
 
   // -------------------------------------------------------------- INFO / weather
-  const SEASONAL_NOTE = "Typical late Sep/early Oct in Barbados: 84–88°F, brief tropical showers that pass quickly. "
+  const BARBADOS_NOTE = "Typical late Sep/early Oct in Barbados: 84–88°F, brief tropical showers that pass quickly. "
     + "This falls within Atlantic hurricane season, though Barbados sits at the southern edge and sees direct hits far less often than islands further north — still worth having travel insurance.";
+  const GENERIC_NOTE = "Live daily highs/lows and rain chances for your trip dates appear here automatically once you're within Open-Meteo's ~16-day forecast window.";
+  function seasonalNote() { return TRIP.builtinInfo === "barbados" ? BARBADOS_NOTE : GENERIC_NOTE; }
 
   function renderTripForecastGrid(forecastDays) {
     const grid = $("#trip-forecast-grid");
@@ -1017,14 +1058,27 @@
 
     const anyLive = (TRIP.days || []).some((iso) => byIso[iso]);
     $("#trip-forecast-note").textContent = anyLive
-      ? SEASONAL_NOTE
-      : "🔮 days = forecast isn't out yet (Open-Meteo predicts ~16 days ahead). This fills in on its own as the trip gets closer — no need to check back manually. " + SEASONAL_NOTE;
+      ? seasonalNote()
+      : "🔮 days = forecast isn't out yet (Open-Meteo predicts ~16 days ahead). This fills in on its own as the trip gets closer — no need to check back manually. " + seasonalNote();
   }
 
   function initInfo() {
-    if (CFG.weather) $("#info-loc").textContent = CFG.weather.locationName || "";
-    renderTripForecastGrid([]); // draw the 6 dated placeholders immediately, independent of network
-    if (!window.Weather) return;
+    const loc = (TRIP.weather && TRIP.weather.locationName) || "";
+    const dest = loc.split(",")[0] || TRIP.title || "Your Trip";
+    const titleEl = $("#info-title");
+    if (titleEl) titleEl.textContent = `${dest} ☀️`;
+    $("#info-loc").textContent = loc;
+    const sunCard = $("#sun-card");
+    if (sunCard) sunCard.style.display = "none"; // shown once sun data loads
+    const barb = $("#barbados-info");
+    if (barb) barb.style.display = TRIP.builtinInfo === "barbados" ? "" : "none";
+    initTripInfoNotes();
+    renderTripForecastGrid([]); // draw the dated placeholders immediately, independent of network
+    if (!window.Weather || !TRIP.weather) {
+      $("#weather-card").innerHTML = `<p>Add a destination for this trip (⚙️ You → Trips → ✏️) to see live weather.</p>`;
+      return;
+    }
+    const shortLoc = dest;
     Weather.fetch().then((wx) => {
       const todayRainPct = wx.rainChance != null ? wx.rainChance : (wx.today && wx.today.rainChance);
       const rainBits = todayRainPct != null ? ` · 🌧️ ${todayRainPct}% rain` : "";
@@ -1034,22 +1088,207 @@
           <span class="wx-emoji">${wx.emoji}</span>
           <span class="wx-temp">${wx.temp}°</span>
         </div>
-        <div class="wx-desc">Right now in St. Lawrence Gap · ${esc(wx.desc)} · 💨 ${wx.wind} mph · 💧 ${wx.humidity}%${rainBits}</div>
+        <div class="wx-desc">Right now in ${esc(shortLoc)} · ${esc(wx.desc)} · 💨 ${wx.wind} mph · 💧 ${wx.humidity}%${rainBits}</div>
         ${rainWhen}`;
       renderTripForecastGrid(wx.forecast);
       if (wx.today) {
         const sr = new Date(wx.today.sunrise).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
         const ss = new Date(wx.today.sunset).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-        $("#sun-card").innerHTML = `<h3>🌅 Sun today (Barbados)</h3>
+        const sunCard = $("#sun-card");
+        sunCard.style.display = "";
+        sunCard.innerHTML = `<h3>🌅 Sun today</h3>
           <p>Sunrise <b>${sr}</b> &nbsp;·&nbsp; Sunset <b>${ss}</b></p>`;
       }
     }).catch((err) => {
       console.warn("weather failed", err);
-      $("#weather-card").innerHTML = `<p>Couldn't load live weather right now (offline?). ${SEASONAL_NOTE}</p>`;
+      $("#weather-card").innerHTML = `<p>Couldn't load live weather right now (offline?). ${seasonalNote()}</p>`;
+    });
+  }
+
+  // Per-trip free-text info notes (saved to this trip's settings).
+  function initTripInfoNotes() {
+    const ta = $("#trip-info-text");
+    if (!ta) return;
+    let lastSaved = "";
+    Store.subscribeSettings((s) => {
+      const v = s.tripInfo || "";
+      if (document.activeElement !== ta) { ta.value = v; lastSaved = v; }
+    });
+    let t = null;
+    ta.addEventListener("input", () => {
+      $("#trip-info-status").textContent = "Saving…";
+      clearTimeout(t);
+      t = setTimeout(() => {
+        if (ta.value === lastSaved) { $("#trip-info-status").textContent = ""; return; }
+        lastSaved = ta.value;
+        Store.setSetting("tripInfo", ta.value).then(() => {
+          $("#trip-info-status").textContent = "✓ Saved";
+          setTimeout(() => { $("#trip-info-status").textContent = ""; }, 1200);
+        });
+      }, 600);
     });
   }
 
   // -------------------------------------------------------------- SETTINGS + bg
+  function tripDateRange(t) {
+    try {
+      const s = new Date(t.startDate), e = new Date(t.endDate);
+      const o = { month: "short", day: "numeric" };
+      return `${s.toLocaleDateString(undefined, o)} – ${e.toLocaleDateString(undefined, o)}, ${e.getFullYear()}`;
+    } catch { return ""; }
+  }
+  function tripPhase(t) {
+    const now = Date.now();
+    const s = new Date(t.startDate).getTime(), e = new Date(t.endDate).getTime();
+    if (now < s) return "upcoming";
+    if (now > e) return "past";
+    return "current";
+  }
+
+  let editingTripId = null;
+  function initTrips() {
+    Store.subscribeTrips((trips) => { ALL_TRIPS = trips || []; renderTripsList(); });
+
+    $("#trip-new-btn").addEventListener("click", () => openTripEditor(null));
+    $("#trip-sheet-close").addEventListener("click", closeTripEditor);
+    $("#trip-sheet").querySelector(".sheet-backdrop").addEventListener("click", closeTripEditor);
+
+    // live geocode feedback (optional)
+    $("#trip-f-place").addEventListener("blur", () => {
+      const v = $("#trip-f-place").value.trim();
+      if (v) $("#trip-f-geo").textContent = "📍 Location will be looked up when you save.";
+    });
+
+    $("#trip-form").addEventListener("submit", saveTripFromForm);
+    $("#trip-f-delete").addEventListener("click", deleteEditingTrip);
+  }
+
+  function renderTripsList() {
+    const el = $("#trips-list");
+    if (!el) return;
+    if (!ALL_TRIPS.length) { el.innerHTML = `<p class="cat-empty">No trips yet.</p>`; return; }
+    const order = { current: 0, upcoming: 1, past: 2 };
+    const sorted = ALL_TRIPS.slice().sort((a, b) => {
+      const pa = tripPhase(a), pb = tripPhase(b);
+      if (order[pa] !== order[pb]) return order[pa] - order[pb];
+      return new Date(b.startDate) - new Date(a.startDate);
+    });
+    const badge = { current: "🟢 Now", upcoming: "⏳ Upcoming", past: "📸 Past" };
+    el.innerHTML = sorted.map((t) => {
+      const active = t.id === Store.activeTripId;
+      const ph = tripPhase(t);
+      return `<div class="trip-row${active ? " active" : ""}" data-id="${esc(t.id)}">
+        <div class="trip-row-main">
+          <div class="trip-row-title">${esc(t.title || "Trip")}${active ? ` <span class="trip-active-tag">● viewing</span>` : ""}</div>
+          <div class="trip-row-meta">${badge[ph]} · ${esc(tripDateRange(t))}</div>
+        </div>
+        <button class="trip-row-edit" data-edit="${esc(t.id)}" aria-label="edit">✏️</button>
+      </div>`;
+    }).join("");
+
+    $$(".trip-row", el).forEach((row) => {
+      row.addEventListener("click", (e) => {
+        if (e.target.closest(".trip-row-edit")) return;
+        const id = row.dataset.id;
+        if (id === Store.activeTripId) return;
+        switchToTrip(id);
+      });
+    });
+    $$(".trip-row-edit", el).forEach((b) => {
+      b.addEventListener("click", () => openTripEditor(ALL_TRIPS.find((t) => t.id === b.dataset.edit)));
+    });
+  }
+
+  function switchToTrip(id) {
+    const t = ALL_TRIPS.find((x) => x.id === id);
+    if (!t) return;
+    if (!confirm(`Switch to “${t.title}”? The app will reload to show that trip.`)) return;
+    Store.setActiveTrip(id).then(() => location.reload());
+  }
+
+  function openTripEditor(trip) {
+    editingTripId = trip ? trip.id : null;
+    $("#trip-sheet-title").textContent = trip ? "Edit trip" : "New trip";
+    $("#trip-f-title").value = trip ? (trip.title || "") : "";
+    $("#trip-f-place").value = trip && trip.weather ? (trip.weather.locationName || "") : "";
+    $("#trip-f-start").value = trip && trip.startDate ? String(trip.startDate).slice(0, 10) : "";
+    $("#trip-f-end").value = trip && trip.endDate ? String(trip.endDate).slice(0, 10) : "";
+    $("#trip-f-p1").value = trip ? (trip.person1 || "") : (TRIP.person1 || "");
+    $("#trip-f-p2").value = trip ? (trip.person2 || "") : (TRIP.person2 || "");
+    $("#trip-f-geo").textContent = "";
+    $("#trip-f-delete").hidden = !trip || ALL_TRIPS.length <= 1;
+    $("#trip-sheet").hidden = false;
+  }
+  function closeTripEditor() { $("#trip-sheet").hidden = true; editingTripId = null; }
+
+  function saveTripFromForm(e) {
+    e.preventDefault();
+    const title = $("#trip-f-title").value.trim();
+    const place = $("#trip-f-place").value.trim();
+    const startD = $("#trip-f-start").value;
+    const endD = $("#trip-f-end").value;
+    if (!title || !startD || !endD) { alert("Please fill in a name and both dates."); return; }
+    if (endD < startD) { alert("End date can't be before the start date."); return; }
+    const existing = editingTripId ? ALL_TRIPS.find((t) => t.id === editingTripId) : null;
+
+    const build = (weather) => {
+      const meta = {
+        title,
+        person1: $("#trip-f-p1").value.trim() || "Us",
+        person2: $("#trip-f-p2").value.trim() || "",
+        startDate: `${startD}T15:00:00`,
+        endDate: `${endD}T11:00:00`,
+        days: deriveDays(`${startD}T12:00:00`, `${endD}T12:00:00`),
+      };
+      if (weather) meta.weather = weather;
+      else if (existing && existing.weather) meta.weather = existing.weather;
+      if (existing && existing.builtinInfo) meta.builtinInfo = existing.builtinInfo;
+
+      const save = editingTripId
+        ? Store.updateTrip(editingTripId, meta).then(() => editingTripId)
+        : Store.addTrip(meta);
+      save.then((id) => {
+        closeTripEditor();
+        if (!editingTripId) {
+          // brand new trip → make it active (fresh blank slate) and reload
+          Store.setActiveTrip(id).then(() => location.reload());
+        } else if (id === Store.activeTripId) {
+          location.reload(); // active trip details changed → refresh countdown/weather
+        }
+      }).catch((err) => { console.error(err); alert("Couldn't save the trip."); });
+    };
+
+    const placeChanged = place && (!existing || !existing.weather || existing.weather.locationName !== place);
+    if (placeChanged && window.Weather && Weather.geocode) {
+      $("#trip-f-geo").textContent = "📍 Looking up location…";
+      Weather.geocode(place).then((w) => { $("#trip-f-geo").textContent = `📍 ${w.locationName}`; build(w); })
+        .catch((err) => {
+          if (confirm(`Couldn't find "${place}". Save the trip without weather for now?`)) build(null);
+          else $("#trip-f-geo").textContent = "⚠️ " + (err.message || "Location not found");
+        });
+    } else {
+      build(null);
+    }
+  }
+
+  function deleteEditingTrip() {
+    if (!editingTripId) return;
+    const t = ALL_TRIPS.find((x) => x.id === editingTripId);
+    if (!t) return;
+    if (ALL_TRIPS.length <= 1) { alert("You can't delete your only trip."); return; }
+    if (!confirm(`Delete “${t.title}” and everything in it? This can't be undone.`)) return;
+    const wasActive = editingTripId === Store.activeTripId;
+    const id = editingTripId;
+    Store.removeTrip(id).then(() => {
+      closeTripEditor();
+      if (wasActive) {
+        const next = ALL_TRIPS.find((x) => x.id !== id);
+        if (next) Store.setActiveTrip(next.id).then(() => location.reload());
+        else location.reload();
+      }
+    }).catch((err) => { console.error(err); alert("Couldn't delete the trip."); });
+  }
+
   function applyBackground(url) {
     const layer = $("#bg-layer");
     if (url) { layer.style.backgroundImage = `url("${url}")`; layer.classList.add("show"); }
@@ -1115,6 +1354,7 @@
   // -------------------------------------------------------------- boot
   function boot() {
     initTabs();
+    initTrips();
     initSettings();
     initPlanner();
     initPacking();
@@ -1128,7 +1368,19 @@
     setInterval(updateCountdown, 1000);
   }
 
-  Store.init().then(boot);
+  Store.init()
+    .then(() => Store.ensureTrips(seedTripFromConfig()))
+    .then(({ trips, activeId }) => {
+      ALL_TRIPS = trips || [];
+      const active = ALL_TRIPS.find((t) => t.id === activeId) || ALL_TRIPS[0] || seedTripFromConfig();
+      applyActiveTrip(active);
+      boot();
+    })
+    .catch((err) => {
+      console.error("boot failed", err);
+      applyActiveTrip(seedTripFromConfig());
+      boot();
+    });
 
   // service worker (offline)
   if ("serviceWorker" in navigator) {
