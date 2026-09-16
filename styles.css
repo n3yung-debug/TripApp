@@ -164,6 +164,17 @@ body[data-tab="notes"] #bg-scrim{background:linear-gradient(180deg,rgba(11,61,71
 .trip-day .e{font-size:22px;margin:3px 0}
 .trip-day.pending{opacity:.55}
 .trip-day .t{font-weight:600}
+.trip-day .r{font-size:11px;color:#8fd3ff;margin-top:2px}
+.wx-rain{margin-top:6px;color:#8fd3ff;font-size:14px;font-weight:600}
+/* Expected-rain list under the trip-week grid */
+.trip-rain-times{margin-top:12px}
+.trip-rain-times:empty{display:none}
+.rain-head{font-size:13px;font-weight:800;color:#8fd3ff;margin-bottom:6px}
+.rain-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid rgba(255,255,255,.08)}
+.rain-day{font-weight:700}
+.rain-when{color:rgba(255,255,255,.9);text-align:right}
+.rain-pct{color:rgba(255,255,255,.6)}
+.rain-none{font-size:13px;color:rgba(255,255,255,.75)}
 
 .sync-status{font-size:14px}
 .sync-status.on{color:var(--turq-bright)}

@@ -18,14 +18,40 @@
   };
   function decode(code){ return CODES[code] || ["🌡️","—"]; }
 
+  // ---- rain-time helpers ----
+  const RAIN_THRESHOLD = 40; // % chance at/above which we flag an hour as "rain expected"
+  function fmtHour(h){
+    h = ((h % 24) + 24) % 24;
+    const ap = h < 12 ? "am" : "pm";
+    let hr = h % 12; if (hr === 0) hr = 12;
+    return hr + ap;
+  }
+  // group contiguous hours (>= threshold) into windows {start, end, peak}
+  function computeWindows(hours){
+    const out = []; let cur = null;
+    hours.forEach((h) => {
+      if (h.prob >= RAIN_THRESHOLD) {
+        if (!cur) cur = { start: h.hour, end: h.hour, peak: h.prob };
+        else { cur.end = h.hour; cur.peak = Math.max(cur.peak, h.prob); }
+      } else if (cur) { out.push(cur); cur = null; }
+    });
+    if (cur) out.push(cur);
+    return out;
+  }
+  function windowsToText(windows){
+    if (!windows || !windows.length) return "";
+    return windows.slice(0, 3).map((w) => `${fmtHour(w.start)}–${fmtHour(w.end + 1)}`).join(", ");
+  }
+
   const Weather = {};
 
   Weather.fetch = function () {
     if (!W) return Promise.reject(new Error("No weather config"));
     const url = `https://api.open-meteo.com/v1/forecast`
       + `?latitude=${W.latitude}&longitude=${W.longitude}`
-      + `&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m`
-      + `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max`
+      + `&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,precipitation_probability`
+      + `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max`
+      + `&hourly=precipitation_probability`
       + `&temperature_unit=fahrenheit&wind_speed_unit=mph`
       // forecast_days=16 is Open-Meteo's max free-tier horizon; the trip is far
       // beyond that until ~2 weeks out, at which point matching days populate
@@ -41,9 +67,23 @@
     const cur = d.current || {};
     const [emoji, desc] = decode(cur.weather_code);
     const daily = d.daily || {};
+
+    // Bucket hourly rain-chance by calendar date so we can find rain windows.
+    const hourly = d.hourly || {};
+    const hTime = hourly.time || [];
+    const hProb = hourly.precipitation_probability || [];
+    const byDate = {};
+    hTime.forEach((t, i) => {
+      const date = t.slice(0, 10);
+      (byDate[date] = byDate[date] || []).push({ hour: parseInt(t.slice(11, 13), 10), prob: hProb[i] == null ? 0 : hProb[i] });
+    });
+
     const days = (daily.time || []).map((iso, i) => {
       const [e] = decode(daily.weather_code[i]);
       const dt = new Date(iso + "T12:00:00");
+      const windows = computeWindows(byDate[iso] || []);
+      const rainChance = (daily.precipitation_probability_max && daily.precipitation_probability_max[i] != null)
+        ? daily.precipitation_probability_max[i] : null;
       return {
         iso,
         label: dt.toLocaleDateString(undefined, { weekday: "short" }),
@@ -52,6 +92,9 @@
         lo: Math.round(daily.temperature_2m_min[i]),
         sunrise: daily.sunrise[i],
         sunset: daily.sunset[i],
+        rainChance,
+        rainWindows: windows,
+        rainTimes: windowsToText(windows),
       };
     });
     return {
@@ -59,6 +102,7 @@
       emoji, desc,
       humidity: cur.relative_humidity_2m,
       wind: Math.round(cur.wind_speed_10m),
+      rainChance: cur.precipitation_probability == null ? null : cur.precipitation_probability,
       forecast: days,
       today: days[0],
     };

@@ -989,12 +989,32 @@
       const num = d.getDate();
       const match = byIso[iso];
       if (match) {
+        const rain = match.rainChance != null ? `<div class="r">💧 ${match.rainChance}%</div>` : "";
         return `<div class="trip-day"><div class="d">${dow}</div><div class="n">${num}</div>
-          <div class="e">${match.emoji}</div><div class="t">${match.hi}°/${match.lo}°</div></div>`;
+          <div class="e">${match.emoji}</div><div class="t">${match.hi}°/${match.lo}°</div>${rain}</div>`;
       }
       return `<div class="trip-day pending"><div class="d">${dow}</div><div class="n">${num}</div>
         <div class="e">🔮</div><div class="t">—</div></div>`;
     }).join("");
+
+    // Expected rain times, only for trip days that have a rain window in the forecast.
+    const rainEl = $("#trip-rain-times");
+    if (rainEl) {
+      const rows = (TRIP.days || []).map((iso) => byIso[iso]).filter((m) => m && m.rainTimes);
+      if (rows.length) {
+        rainEl.innerHTML = `<div class="rain-head">🌧️ Expected rain</div>` + rows.map((m) => {
+          const d = new Date(m.iso + "T12:00:00");
+          const lbl = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+          return `<div class="rain-row"><span class="rain-day">${lbl}</span><span class="rain-when">${m.rainTimes} <span class="rain-pct">(${m.rainChance}%)</span></span></div>`;
+        }).join("");
+      } else {
+        const anyLiveDay = (TRIP.days || []).some((iso) => byIso[iso]);
+        rainEl.innerHTML = anyLiveDay
+          ? `<div class="rain-none">☀️ No significant rain expected on your trip days right now.</div>`
+          : "";
+      }
+    }
+
     const anyLive = (TRIP.days || []).some((iso) => byIso[iso]);
     $("#trip-forecast-note").textContent = anyLive
       ? SEASONAL_NOTE
@@ -1006,12 +1026,16 @@
     renderTripForecastGrid([]); // draw the 6 dated placeholders immediately, independent of network
     if (!window.Weather) return;
     Weather.fetch().then((wx) => {
+      const todayRainPct = wx.rainChance != null ? wx.rainChance : (wx.today && wx.today.rainChance);
+      const rainBits = todayRainPct != null ? ` · 🌧️ ${todayRainPct}% rain` : "";
+      const rainWhen = (wx.today && wx.today.rainTimes) ? `<div class="wx-rain">🌧️ Rain likely ${esc(wx.today.rainTimes)}</div>` : "";
       $("#weather-card").innerHTML = `
         <div class="wx-now">
           <span class="wx-emoji">${wx.emoji}</span>
           <span class="wx-temp">${wx.temp}°</span>
         </div>
-        <div class="wx-desc">Right now in St. Lawrence Gap · ${esc(wx.desc)} · 💨 ${wx.wind} mph · 💧 ${wx.humidity}%</div>`;
+        <div class="wx-desc">Right now in St. Lawrence Gap · ${esc(wx.desc)} · 💨 ${wx.wind} mph · 💧 ${wx.humidity}%${rainBits}</div>
+        ${rainWhen}`;
       renderTripForecastGrid(wx.forecast);
       if (wx.today) {
         const sr = new Date(wx.today.sunrise).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
