@@ -1403,8 +1403,32 @@
 
   // service worker (offline)
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW failed", e));
+    // When a new version takes over: reload right away if we just opened,
+    // otherwise offer a tap-to-refresh banner (never interrupt e.g. an upload).
+    const hadController = !!navigator.serviceWorker.controller;
+    const loadedAt = Date.now();
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || reloading) return; // first-ever install: nothing stale to replace
+      if (Date.now() - loadedAt < 10000) { reloading = true; location.reload(); return; }
+      showUpdateBanner();
     });
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+        reg.update().catch(() => {});
+        // iPhones often resume home-screen apps instead of relaunching — check again on resume.
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") reg.update().catch(() => {});
+        });
+      }).catch((e) => console.warn("SW failed", e));
+    });
+  }
+  function showUpdateBanner() {
+    if (document.getElementById("update-banner")) return;
+    const b = document.createElement("button");
+    b.id = "update-banner"; b.type = "button"; b.className = "update-banner";
+    b.textContent = "✨ New version ready — tap to refresh";
+    b.addEventListener("click", () => location.reload());
+    document.body.appendChild(b);
   }
 })();

@@ -1,6 +1,10 @@
 /* Service worker — offline app shell.
-   Bump CACHE version when you change files to force an update. */
-const CACHE = "tripapp-v14";
+   Strategy: NETWORK-FIRST for our own files, so a new deploy shows up on the
+   next open whenever there's a connection. The cache is only a fallback for
+   offline / very slow networks. Bump CACHE when files change (also clears
+   old caches). */
+const CACHE = "tripapp-v15";
+const NETWORK_TIMEOUT_MS = 4000; // slow connection → fall back to the cached copy
 const ASSETS = [
   "./",
   "./index.html",
@@ -16,7 +20,12 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache:'reload' bypasses the browser's HTTP cache so we never pre-cache stale files.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (e) => {
@@ -27,21 +36,32 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+function networkFirst(req) {
+  // Navigation requests can't be re-wrapped with options, so rebuild from the URL.
+  const netReq = req.mode === "navigate"
+    ? new Request(req.url, { cache: "no-cache", credentials: "same-origin" })
+    : new Request(req, { cache: "no-cache" });
+
+  const network = fetch(netReq).then((res) => {
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+    }
+    return res;
+  });
+
+  const slow = new Promise((resolve) => setTimeout(resolve, NETWORK_TIMEOUT_MS))
+    .then(() => caches.match(req).then((cached) => cached || network));
+
+  return Promise.race([network, slow]).catch(() =>
+    caches.match(req).then((cached) => cached || caches.match("./index.html"))
+  );
+}
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  // Never cache Firebase / weather / other cross-origin API calls — always go to network.
+  // Never touch Firebase / weather / other cross-origin calls — straight to network.
   if (url.origin !== self.location.origin) return;
   if (e.request.method !== "GET") return;
-
-  // Cache-first for our own assets, with network fallback + runtime caching.
-  e.respondWith(
-    caches.match(e.request).then((cached) =>
-      cached ||
-      fetch(e.request).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-        return res;
-      }).catch(() => cached)
-    )
-  );
+  e.respondWith(networkFirst(e.request));
 });
