@@ -962,18 +962,37 @@
 
   // -------------------------------------------------------------- PHOTOS
   function initPhotos() {
-    $("#photo-input").addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const label = $(".photo-upload span");
+    $("#photo-input").addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      const label = $('label[for="photo-input"] span');
       const prev = label.textContent;
-      label.textContent = "Uploading…";
-      Store.uploadImage(file).then(({ url }) => {
-        const caption = prompt("Add a caption (optional):", "") || "";
-        return Store.add("photos", { url, caption });
-      }).catch((err) => {
-        console.error(err); alert("Couldn't add that photo. If you're on cloud sync, check Firebase Storage is enabled.");
-      }).finally(() => { label.textContent = prev; e.target.value = ""; });
+
+      // Single photo: keep the optional caption prompt.
+      if (files.length === 1) {
+        label.textContent = "Uploading…";
+        try {
+          const { url } = await Store.uploadImage(files[0]);
+          const caption = prompt("Add a caption (optional):", "") || "";
+          await Store.add("photos", { url, caption });
+        } catch (err) {
+          console.error(err); alert("Couldn't add that photo. If you're on cloud sync, check Firebase Storage is enabled.");
+        } finally { label.textContent = prev; e.target.value = ""; }
+        return;
+      }
+
+      // Multiple photos: upload one at a time (easier on phone memory, keeps order), no captions.
+      let failed = 0;
+      for (let i = 0; i < files.length; i++) {
+        label.textContent = `Uploading ${i + 1} of ${files.length}…`;
+        try {
+          const { url } = await Store.uploadImage(files[i]);
+          await Store.add("photos", { url, caption: "" });
+        } catch (err) { console.error(err); failed++; }
+      }
+      label.textContent = prev;
+      e.target.value = "";
+      if (failed) alert(`${files.length - failed} of ${files.length} photos added. ${failed} couldn't be uploaded — try those again.`);
     });
     Store.subscribe("photos", renderPhotos);
   }
