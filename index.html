@@ -300,6 +300,20 @@
   <!-- Confetti canvas for milestones -->
   <canvas id="confetti"></canvas>
 
+  <!-- ================= PHOTO LIGHTBOX (tap a memory to expand) ================= -->
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
+    <div class="lb-top">
+      <span id="lb-count" class="lb-count"></span>
+      <button id="lb-close" class="lb-btn lb-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div id="lb-stage" class="lb-stage">
+      <img id="lb-img" class="lb-img" alt="" draggable="false" />
+    </div>
+    <button id="lb-prev" class="lb-btn lb-nav lb-prev" type="button" aria-label="Previous photo">‹</button>
+    <button id="lb-next" class="lb-btn lb-nav lb-next" type="button" aria-label="Next photo">›</button>
+    <div id="lb-cap" class="lb-cap"></div>
+  </div>
+
   <!-- ================= TRIP EDITOR SHEET ================= -->
   <div id="trip-sheet" class="sheet" hidden>
     <div class="sheet-backdrop"></div>

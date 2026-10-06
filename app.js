@@ -994,22 +994,120 @@
       e.target.value = "";
       if (failed) alert(`${files.length - failed} of ${files.length} photos added. ${failed} couldn't be uploaded — try those again.`);
     });
+    initLightbox();
     Store.subscribe("photos", renderPhotos);
   }
+  let photoList = []; // photos in on-screen order (newest first) — the lightbox pages through this
   function renderPhotos(rows) {
     const grid = $("#photo-grid");
     grid.innerHTML = "";
+    photoList = rows.slice().reverse();
+    syncLightbox();
     if (!rows.length) { grid.appendChild(emptyMsg("No photos yet — add your favorites 📸")); return; }
-    rows.slice().reverse().forEach((r) => {
+    photoList.forEach((r, i) => {
       const fig = document.createElement("figure");
       fig.innerHTML = `<img loading="lazy" src="${esc(r.url)}" alt="${esc(r.caption || "memory")}" />
         ${r.caption ? `<figcaption class="photo-cap">${esc(r.caption)}</figcaption>` : ""}
         <button class="photo-del" aria-label="delete">×</button>`;
+      fig.querySelector("img").addEventListener("click", () => openLightbox(i));
       fig.querySelector(".photo-del").addEventListener("click", () => {
         if (confirm("Remove this photo?")) Store.remove("photos", r.id);
       });
       grid.appendChild(fig);
     });
+  }
+
+  // -------------------------------------------------------------- PHOTO LIGHTBOX
+  let lbIndex = -1;  // -1 = closed
+  let lbId = null;   // id of the photo on screen, so live sync changes don't jump to a different one
+  function openLightbox(i) {
+    if (!photoList[i]) return;
+    lbIndex = i;
+    $("#lightbox").hidden = false;
+    document.body.style.overflow = "hidden";
+    showLightboxPhoto();
+  }
+  function closeLightbox() {
+    lbIndex = -1; lbId = null;
+    $("#lightbox").hidden = true;
+    document.body.style.overflow = "";
+    const img = $("#lb-img"); img.style.transform = ""; img.style.opacity = "";
+  }
+  function showLightboxPhoto() {
+    const r = photoList[lbIndex];
+    if (!r) { closeLightbox(); return; }
+    lbId = r.id;
+    const img = $("#lb-img");
+    img.style.transform = ""; img.style.opacity = "";
+    img.src = r.url;
+    img.alt = r.caption || "memory";
+    $("#lb-cap").textContent = r.caption || "";
+    $("#lb-count").textContent = photoList.length > 1 ? `${lbIndex + 1} / ${photoList.length}` : "";
+    $("#lb-prev").disabled = lbIndex <= 0;
+    $("#lb-next").disabled = lbIndex >= photoList.length - 1;
+  }
+  function stepLightbox(dir) {
+    const n = lbIndex + dir;
+    if (n < 0 || n >= photoList.length) return false;
+    lbIndex = n; showLightboxPhoto();
+    return true;
+  }
+  // Photos changed while the viewer is open (e.g. Kelli added/removed one): stay on the same photo.
+  function syncLightbox() {
+    if (lbIndex < 0) return;
+    if (!photoList.length) { closeLightbox(); return; }
+    const at = photoList.findIndex((p) => p.id === lbId);
+    lbIndex = at >= 0 ? at : Math.min(lbIndex, photoList.length - 1);
+    showLightboxPhoto();
+  }
+  function initLightbox() {
+    const lb = $("#lightbox"), img = $("#lb-img");
+    $("#lb-close").addEventListener("click", closeLightbox);
+    $("#lb-prev").addEventListener("click", () => stepLightbox(-1));
+    $("#lb-next").addEventListener("click", () => stepLightbox(1));
+    document.addEventListener("keydown", (e) => {
+      if (lbIndex < 0) return;
+      if (e.key === "Escape") closeLightbox();
+      else if (e.key === "ArrowLeft") stepLightbox(-1);
+      else if (e.key === "ArrowRight") stepLightbox(1);
+    });
+
+    // Without this, a swipe that starts on the photo becomes a native image drag and gets cancelled.
+    img.addEventListener("dragstart", (e) => e.preventDefault());
+
+    // Swipe: left/right = next/prev, down = close. A plain tap outside the photo closes.
+    let sx = 0, sy = 0, tracking = false;
+    lb.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".lb-btn")) return;
+      tracking = true; sx = e.clientX; sy = e.clientY;
+      img.style.transition = "none";
+    });
+    lb.addEventListener("pointermove", (e) => {
+      if (!tracking) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) > Math.abs(dy)) img.style.transform = `translateX(${dx}px)`;
+      else if (dy > 0) { img.style.transform = `translateY(${dy}px)`; img.style.opacity = String(Math.max(0.3, 1 - dy / 400)); }
+    });
+    const finish = (e) => {
+      if (!tracking) return;
+      tracking = false;
+      img.style.transition = "";
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      const isTap = Math.abs(dx) < 10 && Math.abs(dy) < 10;
+      if (isTap) {
+        img.style.transform = ""; img.style.opacity = "";
+        if (e.target !== img) closeLightbox();               // tap on the dark area closes
+        return;
+      }
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+        if (!stepLightbox(dx < 0 ? 1 : -1)) img.style.transform = ""; // at the end: bounce back
+        return;
+      }
+      if (dy > 100 && Math.abs(dy) > Math.abs(dx)) { closeLightbox(); return; }
+      img.style.transform = ""; img.style.opacity = "";
+    };
+    lb.addEventListener("pointerup", finish);
+    lb.addEventListener("pointercancel", (e) => { tracking = false; img.style.transition = ""; img.style.transform = ""; img.style.opacity = ""; });
   }
 
   // -------------------------------------------------------------- HOME PHOTO STRIP

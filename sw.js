@@ -3,7 +3,7 @@
    next open whenever there's a connection. The cache is only a fallback for
    offline / very slow networks. Bump CACHE when files change (also clears
    old caches). */
-const CACHE = "tripapp-v15";
+const CACHE = "tripapp-v16";
 const NETWORK_TIMEOUT_MS = 4000; // slow connection → fall back to the cached copy
 const ASSETS = [
   "./",
